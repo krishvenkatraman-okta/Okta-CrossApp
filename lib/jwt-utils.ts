@@ -3,82 +3,68 @@ import { OKTA_CONFIG } from "./okta-config"
 /**
  * Creates a JWT client assertion for client authentication
  */
-export async function createClientAssertion(audience: string): Promise<string> {
+export async function createClientAssertion(): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
 
   const header = {
-    alg: "RS256",
     kid: OKTA_CONFIG.privateKeyJWT.kid,
-    typ: "JWT",
+    alg: "RS256",
   }
 
   const payload = {
-    iss: OKTA_CONFIG.clientId,
-    sub: OKTA_CONFIG.clientId,
-    aud: audience,
+    iss: OKTA_CONFIG.agentPrincipalId,
+    aud: `${OKTA_CONFIG.orgDomain}/oauth2/v1/token`, // Token endpoint as aud
+    sub: OKTA_CONFIG.agentPrincipalId,
+    exp: now + 60,
     iat: now,
-    exp: now + 300, // 5 minutes
     jti: generateJti(),
   }
 
-  const headerB64 = base64UrlEncode(JSON.stringify(header))
-  const payloadB64 = base64UrlEncode(JSON.stringify(payload))
-  const signatureInput = `${headerB64}.${payloadB64}`
+  console.log("[v0] Creating client assertion JWT")
+  console.log("[v0] JWT Payload:", payload)
+
+  const encoder = new TextEncoder()
 
   // Import the private key
-  const privateKey = await importPrivateKey(OKTA_CONFIG.privateKeyJWT)
-
-  // Sign the JWT
-  const signature = await signJWT(signatureInput, privateKey)
-  const signatureB64 = arrayBufferToBase64Url(signature)
-
-  return `${signatureInput}.${signatureB64}`
-}
-
-/**
- * Imports the private key for signing
- */
-async function importPrivateKey(jwk: any): Promise<CryptoKey> {
-  return await crypto.subtle.importKey(
+  const privateKey = await crypto.subtle.importKey(
     "jwk",
-    jwk,
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      hash: "SHA-256",
-    },
-    false,
+    OKTA_CONFIG.privateKeyJWT,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    true,
     ["sign"],
   )
+
+  // Create the signature input
+  const head = base64UrlEncode(encoder.encode(JSON.stringify(header)))
+  const body = base64UrlEncode(encoder.encode(JSON.stringify(payload)))
+  const signatureInput = head + "." + body
+
+  // Sign the JWT
+  const signature = await crypto.subtle.sign(
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    privateKey,
+    encoder.encode(signatureInput),
+  )
+
+  const sig = base64UrlEncode(signature)
+  const jwt = signatureInput + "." + sig
+
+  console.log("[v0] Client assertion created")
+
+  return jwt
 }
 
 /**
- * Signs the JWT
+ * Base64 URL encode
  */
-async function signJWT(data: string, privateKey: CryptoKey): Promise<ArrayBuffer> {
-  const encoder = new TextEncoder()
-  const dataBuffer = encoder.encode(data)
-  return await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, dataBuffer)
-}
+function base64UrlEncode(input: ArrayBuffer | Uint8Array): string {
+  const bytes = input instanceof ArrayBuffer ? new Uint8Array(input) : input
 
-/**
- * Base64 URL encode a string
- */
-function base64UrlEncode(str: string): string {
-  const base64 = btoa(unescape(encodeURIComponent(str)))
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")
-}
-
-/**
- * Convert ArrayBuffer to Base64 URL
- */
-function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer)
-  let binary = ""
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
+  const arr: string[] = []
+  for (let i = 0; i < bytes.byteLength; i += 0x8000) {
+    arr.push(String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000))))
   }
-  const base64 = btoa(binary)
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")
+  return btoa(arr.join("")).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_")
 }
 
 /**
