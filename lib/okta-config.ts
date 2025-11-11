@@ -34,6 +34,7 @@ export const OKTA_CONFIG = {
 export const OAUTH_ENDPOINTS = {
   authorization: OKTA_CONFIG.orgAuthorizationEndpoint,
   token: `${OKTA_CONFIG.orgDomain}/oauth2/v1/token`,
-  jwks: `${OKTA_CONFIG.authServerIssuer}/v1/keys`,
+  jwks: `${OKTA_CONFIG.orgDomain}/oauth2/v1/keys`,
+  authServerJwks: `${OKTA_CONFIG.authServerIssuer}/v1/keys`,
   metadata: `${OKTA_CONFIG.authServerIssuer}/.well-known/oauth-authorization-server`,
 }

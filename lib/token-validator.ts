@@ -130,7 +130,13 @@ async function verifySignature(token: string, jwks: JWKS): Promise<boolean> {
  */
 export async function validateAccessToken(token: string): Promise<TokenClaims> {
   // Decode token
-  const { payload } = decodeToken(token)
+  const { payload, header } = decodeToken(token)
+
+  console.log("[v0] Validating token with kid:", header.kid)
+  console.log("[v0] Token issuer:", payload.iss)
+  console.log("[v0] Token audience:", payload.aud)
+  console.log("[v0] Token client_id:", payload.client_id)
+  console.log("[v0] Fetching JWKS from:", OAUTH_ENDPOINTS.jwks)
 
   // Validate issuer
   if (payload.iss !== OKTA_CONFIG.orgDomain) {
@@ -155,6 +161,11 @@ export async function validateAccessToken(token: string): Promise<TokenClaims> {
 
   // Fetch JWKS and verify signature
   const jwks = await fetchJWKS()
+  console.log(
+    "[v0] Available key IDs in JWKS:",
+    jwks.keys.map((k) => k.kid),
+  )
+
   const isValid = await verifySignature(token, jwks)
 
   if (!isValid) {
