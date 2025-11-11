@@ -3,6 +3,7 @@ export const OKTA_CONFIG = {
   // Agent App Configuration
   clientId: "0oa8uywkjcduK9wG30g7",
   orgDomain: "https://qa-aiagentsproduct2tc1.trexcloud.com",
+  orgAuthorizationEndpoint: "https://qa-aiagentsproduct2tc1.trexcloud.com/oauth2/v1/authorize",
   authServerIssuer: "https://qa-aiagentsproduct2tc1.trexcloud.com/oauth2/aus8uyrhdz9VliiSG0g7",
   clientSecret: "kynuDVOz8uJiN50KC8mVG5Fs4MLi3CF0ePPPLAYueihTXKcuAzDLjPTYllPOEkU7",
   agentPrincipalId: "wlp8uz04u5JEBjmHf0g7",
@@ -31,7 +32,7 @@ export const OKTA_CONFIG = {
 
 // OAuth endpoints
 export const OAUTH_ENDPOINTS = {
-  authorization: `${OKTA_CONFIG.authServerIssuer}/v1/authorize`,
+  authorization: OKTA_CONFIG.orgAuthorizationEndpoint,
   token: `${OKTA_CONFIG.orgDomain}/oauth2/v1/token`,
   jwks: `${OKTA_CONFIG.authServerIssuer}/v1/keys`,
   metadata: `${OKTA_CONFIG.authServerIssuer}/.well-known/oauth-authorization-server`,
