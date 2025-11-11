@@ -2,6 +2,7 @@
 
 import { OKTA_CONFIG, OAUTH_ENDPOINTS } from "./okta-config"
 import { generateCodeVerifier, generateCodeChallenge, generateState } from "./pkce"
+import { tokenStore } from "./token-store"
 
 export interface AuthTokens {
   accessToken: string
@@ -93,6 +94,9 @@ export async function handleCallback(code: string, state: string, redirectUri: s
  * Stores tokens in sessionStorage
  */
 export function storeTokens(tokens: AuthTokens): void {
+  tokenStore.setToken("id_token", tokens.idToken)
+  tokenStore.setToken("access_token", tokens.accessToken)
+
   sessionStorage.setItem("okta_id_token", tokens.idToken)
   sessionStorage.setItem("okta_access_token", tokens.accessToken)
   if (tokens.refreshToken) {
@@ -112,6 +116,8 @@ export function getIdToken(): string | null {
  * Clears all stored tokens
  */
 export function clearTokens(): void {
+  tokenStore.clearTokens()
+
   sessionStorage.removeItem("okta_id_token")
   sessionStorage.removeItem("okta_access_token")
   sessionStorage.removeItem("okta_refresh_token")

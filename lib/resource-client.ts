@@ -1,6 +1,7 @@
 "use client"
 
 import { getIdToken } from "./auth-client"
+import { tokenStore } from "./token-store"
 
 export interface EnterpriseDataResponse<T> {
   success: boolean
@@ -38,6 +39,9 @@ async function getAccessToken(): Promise<string> {
 
   const data = await response.json()
   console.log("[v0] Cross-app access token received")
+
+  tokenStore.setToken("id_jag_token", data.accessToken)
+
   return data.accessToken
 }
 

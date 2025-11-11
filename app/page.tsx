@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { isAuthenticated, clearTokens } from "@/lib/auth-client"
 import { LoginButton } from "@/components/login-button"
 import { EnterpriseDashboard } from "@/components/enterprise-dashboard"
+import { TokenPanel } from "@/components/token-panel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Shield, LogOut, CheckCircle2 } from "lucide-react"
@@ -11,6 +12,7 @@ import { Shield, LogOut, CheckCircle2 } from "lucide-react"
 export default function Home() {
   const [authenticated, setAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [showTokenPanel, setShowTokenPanel] = useState(true)
 
   useEffect(() => {
     setAuthenticated(isAuthenticated())
@@ -87,15 +89,32 @@ export default function Home() {
               <p className="text-xs text-muted-foreground">Enterprise Data Portal</p>
             </div>
           </div>
-          <Button onClick={handleLogout} variant="outline" className="gap-2 bg-transparent">
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setShowTokenPanel(!showTokenPanel)}
+              variant="outline"
+              size="sm"
+              className="bg-transparent"
+            >
+              {showTokenPanel ? "Hide" : "Show"} Tokens
+            </Button>
+            <Button onClick={handleLogout} variant="outline" className="gap-2 bg-transparent">
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="container mx-auto p-6">
-        <EnterpriseDashboard />
+      <main className="container mx-auto grid gap-6 p-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <EnterpriseDashboard />
+        </div>
+        {showTokenPanel && (
+          <div className="lg:col-span-1">
+            <TokenPanel />
+          </div>
+        )}
       </main>
     </div>
   )
