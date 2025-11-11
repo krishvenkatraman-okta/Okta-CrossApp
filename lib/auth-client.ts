@@ -57,25 +57,21 @@ export async function handleCallback(code: string, state: string, redirectUri: s
     throw new Error("Missing code verifier")
   }
 
-  // Exchange code for tokens
-  const response = await fetch(OAUTH_ENDPOINTS.token, {
+  const response = await fetch("/api/auth/callback", {
     method: "POST",
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Type": "application/json",
     },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code: code,
-      redirect_uri: redirectUri,
-      client_id: OKTA_CONFIG.clientId,
-      client_secret: OKTA_CONFIG.clientSecret,
-      code_verifier: codeVerifier,
+    body: JSON.stringify({
+      code,
+      codeVerifier,
+      redirectUri,
     }),
   })
 
   if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Token exchange failed: ${error}`)
+    const error = await response.json()
+    throw new Error(`Token exchange failed: ${JSON.stringify(error)}`)
   }
 
   const tokens = await response.json()
@@ -86,10 +82,10 @@ export async function handleCallback(code: string, state: string, redirectUri: s
   sessionStorage.removeItem("pkce_nonce")
 
   return {
-    accessToken: tokens.access_token,
-    idToken: tokens.id_token,
-    refreshToken: tokens.refresh_token,
-    expiresIn: tokens.expires_in,
+    accessToken: tokens.accessToken,
+    idToken: tokens.idToken,
+    refreshToken: tokens.refreshToken,
+    expiresIn: tokens.expiresIn,
   }
 }
 
