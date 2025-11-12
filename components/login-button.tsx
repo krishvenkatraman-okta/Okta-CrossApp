@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { initiateLogin } from "@/lib/auth-client"
-import { LogIn } from "lucide-react"
+import { LogIn } from "@/components/icons"
 
 export function LoginButton() {
   const handleLogin = async () => {

@@ -7,7 +7,7 @@ import { EnterpriseDashboard } from "@/components/enterprise-dashboard"
 import { TokenPanel } from "@/components/token-panel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Shield, LogOut, CheckCircle2, BookOpen, Database, BarChart3 } from "lucide-react"
+import { Shield, LogOut, CheckCircle2, BookOpen, Database, BarChart3 } from "@/components/icons"
 import Link from "next/link"
 
 export default function Home() {

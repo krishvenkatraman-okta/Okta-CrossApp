@@ -12,26 +12,28 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.substring(7)
 
-    // Validate the token
     const claims = await validateAccessToken(token)
+    console.log("[v0] Validated ID-JAG token for HR resource")
 
-    // Check if token has required scope
-    if (!claims.scope.includes("mcp:read")) {
-      return NextResponse.json({ error: "Insufficient permissions. Required scope: mcp:read" }, { status: 403 })
+    const scopes = claims.scope?.split(" ") || []
+    if (!scopes.includes("hr:read")) {
+      return NextResponse.json({ error: "Insufficient permissions. Required scope: hr:read" }, { status: 403 })
     }
 
-    // Return HR data
+    console.log("[v0] Accessing HR data with ID-JAG token")
+
     return NextResponse.json({
       success: true,
       data: HR_DATA,
       metadata: {
         requestedBy: claims.sub,
         clientId: claims.client_id,
+        scopes: scopes,
         timestamp: new Date().toISOString(),
       },
     })
   } catch (error) {
-    console.error("Token validation error:", error)
+    console.error("[v0] Resource API error:", error)
     return NextResponse.json(
       {
         error: "Unauthorized",

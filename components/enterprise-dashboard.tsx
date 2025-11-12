@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fetchHRData, fetchFinancialData, fetchKPIData } from "@/lib/resource-client"
 import type { Employee, FinancialData, KPIData } from "@/lib/enterprise-data"
-import { Loader2, Users, DollarSign, TrendingUp, AlertCircle, ArrowUp, ArrowDown, Minus } from "lucide-react"
+import { Loader2, Users, DollarSign, TrendingUp, AlertCircle, ArrowUp, ArrowDown, Minus } from "@/components/icons"
 
 type DataState<T> = {
   data: T | null

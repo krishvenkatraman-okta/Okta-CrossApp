@@ -11,7 +11,7 @@ export const OKTA_CONFIG = {
   scope: "openid profile email",
 
   // Token Exchange Configuration
-  tokenExchangeScope: "mcp:read",
+  tokenExchangeScope: "hr:read finance:read kpi:read",
 
   // Private Key JWT for client authentication
   privateKeyJWT: {

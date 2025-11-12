@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BookOpen, Code, Shield, CheckCircle2, Copy } from "lucide-react"
+import { BookOpen, Code, Shield, CheckCircle2, Copy } from "@/components/icons"
 
 export default function APIDocsPage() {
   const copyToClipboard = (text: string) => {

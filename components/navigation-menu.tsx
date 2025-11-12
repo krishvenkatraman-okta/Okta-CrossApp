@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { BookOpen, Database, BarChart3, Home } from "lucide-react"
+import { BookOpen, Database, BarChart3, Home } from "@/components/icons"
 import { cn } from "@/lib/utils"
 
 export function NavigationMenu() {

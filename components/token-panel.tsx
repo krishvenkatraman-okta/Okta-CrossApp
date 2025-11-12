@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { tokenStore } from "@/lib/token-store"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Copy, Check, Eye, EyeOff } from "lucide-react"
+import { Copy, Check, Eye, EyeOff } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 
 interface TokenInfo {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { handleCallback, storeTokens } from "@/lib/auth-client"
-import { Loader2 } from "lucide-react"
+import { Loader2 } from "@/components/icons"
 
 export default function CallbackPage() {
   const router = useRouter()
