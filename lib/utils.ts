@@ -1,6 +1,9 @@
-import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
+// Simple className utility without external dependencies
+type ClassValue = string | number | boolean | undefined | null | ClassValue[]
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+export function cn(...inputs: ClassValue[]): string {
+  return inputs
+    .flat()
+    .filter((x) => typeof x === "string" && x.length > 0)
+    .join(" ")
 }

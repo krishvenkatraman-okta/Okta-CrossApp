@@ -7,7 +7,8 @@ import { EnterpriseDashboard } from "@/components/enterprise-dashboard"
 import { TokenPanel } from "@/components/token-panel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Shield, LogOut, CheckCircle2 } from "lucide-react"
+import { Shield, LogOut, CheckCircle2, BookOpen, Database, BarChart3 } from "lucide-react"
+import Link from "next/link"
 
 export default function Home() {
   const [authenticated, setAuthenticated] = useState(false)
@@ -71,6 +72,33 @@ export default function Home() {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Resource Servers</CardTitle>
+              <CardDescription>Explore our standalone resource servers with CAA support</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Link href="/financial-server">
+                <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
+                  <Database className="h-4 w-4 text-blue-600" />
+                  Financial Resource Server
+                </Button>
+              </Link>
+              <Link href="/kpi-server">
+                <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
+                  <BarChart3 className="h-4 w-4 text-purple-600" />
+                  KPI Resource Server
+                </Button>
+              </Link>
+              <Link href="/api-docs">
+                <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
+                  <BookOpen className="h-4 w-4 text-indigo-600" />
+                  API Documentation
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
@@ -90,6 +118,24 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/api-docs">
+              <Button variant="ghost" size="sm">
+                <BookOpen className="h-4 w-4 mr-2" />
+                API Docs
+              </Button>
+            </Link>
+            <Link href="/financial-server">
+              <Button variant="ghost" size="sm">
+                <Database className="h-4 w-4 mr-2" />
+                Financial Server
+              </Button>
+            </Link>
+            <Link href="/kpi-server">
+              <Button variant="ghost" size="sm">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                KPI Server
+              </Button>
+            </Link>
             <Button
               onClick={() => setShowTokenPanel(!showTokenPanel)}
               variant="outline"
