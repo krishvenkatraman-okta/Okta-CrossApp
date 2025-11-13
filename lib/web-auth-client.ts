@@ -27,6 +27,25 @@ export async function initiateWebLogin(redirectUri: string): Promise<void> {
   const state = generateState()
   const nonce = generateState()
 
+  console.log("[v0] Web Auth Config:", {
+    clientId: OKTA_WEB_CLIENT_CONFIG.clientId,
+    orgDomain: OKTA_WEB_CLIENT_CONFIG.orgDomain,
+    redirectUri: redirectUri,
+  })
+
+  // Validate configuration
+  if (!OKTA_WEB_CLIENT_CONFIG.clientId) {
+    throw new Error(
+      "OKTA_WEB_CLIENT_ID is not configured. Please set NEXT_PUBLIC_OKTA_WEB_CLIENT_ID environment variable.",
+    )
+  }
+
+  if (!OKTA_WEB_CLIENT_CONFIG.orgDomain) {
+    throw new Error(
+      "OKTA_WEB_ORG_DOMAIN is not configured. Please set NEXT_PUBLIC_OKTA_WEB_ORG_DOMAIN environment variable.",
+    )
+  }
+
   // Store state and nonce for validation
   sessionStorage.setItem("web_auth_state", state)
   sessionStorage.setItem("web_auth_nonce", nonce)
@@ -42,6 +61,9 @@ export async function initiateWebLogin(redirectUri: string): Promise<void> {
   })
 
   const authUrl = `${OKTA_WEB_ENDPOINTS.authorization}?${params.toString()}`
+
+  console.log("[v0] Redirecting to:", authUrl)
+
   window.location.href = authUrl
 }
 

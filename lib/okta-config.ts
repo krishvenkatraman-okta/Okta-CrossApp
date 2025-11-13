@@ -56,10 +56,21 @@ export const OKTA_CAA_CONFIG = {
 
 // Okta tenant configuration for web client auth (no PKCE)
 export const OKTA_WEB_CLIENT_CONFIG = {
-  clientId: process.env.OKTA_WEB_CLIENT_ID || "",
+  clientId:
+    typeof window !== "undefined"
+      ? (window as any).NEXT_PUBLIC_OKTA_WEB_CLIENT_ID || process.env.NEXT_PUBLIC_OKTA_WEB_CLIENT_ID || ""
+      : process.env.OKTA_WEB_CLIENT_ID || "",
   clientSecret: process.env.OKTA_WEB_CLIENT_SECRET || "",
-  orgDomain: process.env.OKTA_WEB_ORG_DOMAIN || "",
-  authServerIssuer: process.env.OKTA_WEB_AUTH_SERVER_ISSUER || "",
+  orgDomain:
+    typeof window !== "undefined"
+      ? (window as any).NEXT_PUBLIC_OKTA_WEB_ORG_DOMAIN || process.env.NEXT_PUBLIC_OKTA_WEB_ORG_DOMAIN || ""
+      : process.env.OKTA_WEB_ORG_DOMAIN || "",
+  authServerIssuer:
+    typeof window !== "undefined"
+      ? (window as any).NEXT_PUBLIC_OKTA_WEB_AUTH_SERVER_ISSUER ||
+        process.env.NEXT_PUBLIC_OKTA_WEB_AUTH_SERVER_ISSUER ||
+        ""
+      : process.env.OKTA_WEB_AUTH_SERVER_ISSUER || "",
   redirectUri: "/auth/web-callback",
   scope: "openid profile email",
 } as const
