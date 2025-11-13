@@ -38,3 +38,18 @@ export const OAUTH_ENDPOINTS = {
   authServerJwks: `${OKTA_CONFIG.authServerIssuer}/v1/keys`,
   metadata: `${OKTA_CONFIG.authServerIssuer}/.well-known/oauth-authorization-server`,
 }
+
+// Auth0 configuration for Finance API cross-app access
+export const AUTH0_CONFIG = {
+  audience: process.env.AUTH0_AUDIENCE || "",
+  resource: process.env.AUTH0_RESOURCE || "",
+  tokenEndpoint: process.env.AUTH0_TOKEN_ENDPOINT || "",
+  clientId: process.env.AUTH0_REQUESTING_APP_CLIENT_ID || "",
+  clientSecret: process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET || "",
+  scope: "finance:read",
+} as const
+
+export const OKTA_CAA_CONFIG = {
+  clientId: process.env.OKTA_REQUESTING_APP_CLIENT_ID || OKTA_CONFIG.clientId,
+  clientSecret: process.env.OKTA_REQUESTING_APP_CLIENT_SECRET || OKTA_CONFIG.clientSecret,
+} as const
