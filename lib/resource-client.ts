@@ -1,6 +1,7 @@
 "use client"
 
 import { getIdToken } from "./auth-client"
+import { getWebIdToken } from "./web-auth-client"
 import { tokenStore } from "./token-store"
 
 export interface EnterpriseDataResponse<T> {
@@ -14,10 +15,31 @@ export interface EnterpriseDataResponse<T> {
 }
 
 /**
+ * Gets ID token from either PKCE auth or Web auth
+ */
+function getAnyIdToken(): string | null {
+  // Try PKCE auth first
+  const pkceToken = getIdToken()
+  if (pkceToken) {
+    console.log("[v0] Using PKCE ID token")
+    return pkceToken
+  }
+
+  // Try Web auth
+  const webToken = getWebIdToken()
+  if (webToken) {
+    console.log("[v0] Using Web Client ID token")
+    return webToken
+  }
+
+  return null
+}
+
+/**
  * Exchanges ID token for access token (ID-JAG)
  */
 async function getAccessToken(): Promise<string> {
-  const idToken = getIdToken()
+  const idToken = getAnyIdToken()
   if (!idToken) {
     throw new Error("Not authenticated. Please log in first.")
   }
@@ -49,7 +71,7 @@ async function getAccessToken(): Promise<string> {
  * Exchanges ID token for Auth0 access token via ID-JAG
  */
 async function getAuth0AccessToken(): Promise<string> {
-  const idToken = getIdToken()
+  const idToken = getAnyIdToken()
   if (!idToken) {
     throw new Error("Not authenticated. Please log in first.")
   }
