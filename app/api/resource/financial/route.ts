@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { validateAuth0Token } from "@/lib/auth0-token-validator"
+import { validateAccessToken } from "@/lib/token-validator"
 import { FINANCIAL_DATA } from "@/lib/enterprise-data"
 
 export async function GET(request: NextRequest) {
@@ -12,15 +12,15 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.substring(7)
 
-    const claims = await validateAuth0Token(token)
-    console.log("[v0] Validated Auth0 access token for Financial resource")
+    const claims = await validateAccessToken(token)
+    console.log("[v0] Validated ID-JAG token for Financial resource")
 
     const scopes = claims.scope?.split(" ") || []
     if (!scopes.includes("finance:read")) {
       return NextResponse.json({ error: "Insufficient permissions. Required scope: finance:read" }, { status: 403 })
     }
 
-    console.log("[v0] Accessing Financial data with Auth0 access token")
+    console.log("[v0] Accessing Financial data with ID-JAG token")
 
     // Return financial data
     return NextResponse.json({
@@ -28,9 +28,9 @@ export async function GET(request: NextRequest) {
       data: FINANCIAL_DATA,
       metadata: {
         requestedBy: claims.sub,
+        clientId: claims.client_id,
         scopes: scopes,
         timestamp: new Date().toISOString(),
-        protectedBy: "Auth0",
       },
     })
   } catch (error) {

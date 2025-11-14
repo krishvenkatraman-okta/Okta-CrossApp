@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { isAuthenticated, clearTokens } from "@/lib/auth-client"
-import { isWebAuthenticated, clearWebTokens } from "@/lib/web-auth-client"
 import { LoginButton } from "@/components/login-button"
 import { EnterpriseDashboard } from "@/components/enterprise-dashboard"
 import { TokenPanel } from "@/components/token-panel"
@@ -13,32 +12,24 @@ import Link from "next/link"
 
 export default function Home() {
   const [authenticated, setAuthenticated] = useState(false)
-  const [webAuthenticated, setWebAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showTokenPanel, setShowTokenPanel] = useState(true)
 
   useEffect(() => {
-    const pkceAuth = isAuthenticated()
-    const webAuth = isWebAuthenticated()
-    setAuthenticated(pkceAuth)
-    setWebAuthenticated(webAuth)
+    setAuthenticated(isAuthenticated())
     setLoading(false)
   }, [])
 
   const handleLogout = () => {
     clearTokens()
-    clearWebTokens()
     setAuthenticated(false)
-    setWebAuthenticated(false)
   }
 
   if (loading) {
     return null
   }
 
-  const isLoggedIn = authenticated || webAuthenticated
-
-  if (!isLoggedIn) {
+  if (!authenticated) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-background to-muted p-4">
         <div className="w-full max-w-md space-y-6">
@@ -55,7 +46,7 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle>Authentication Required</CardTitle>
-              <CardDescription>Choose your authentication flow to access enterprise data</CardDescription>
+              <CardDescription>Sign in with Okta to access enterprise HR, financial, and KPI data</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -66,15 +57,15 @@ export default function Home() {
                   <ul className="ml-4 space-y-1 text-muted-foreground">
                     <li className="flex items-start gap-2">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                      <span>PKCE Flow: Direct Okta ID-JAG for HR/KPI APIs</span>
+                      <span>Authenticate with Okta using Authorization Code + PKCE</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                      <span>Web Client: Okta → Auth0 token exchange for Finance API</span>
+                      <span>Request cross-app access using token exchange (ID-JAG)</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                      <span>Resource APIs validate tokens with appropriate scopes</span>
+                      <span>Access resource APIs with validated tokens</span>
                     </li>
                   </ul>
                 </div>
@@ -123,10 +114,7 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-lg font-bold">Okta Cross-App Access</h1>
-              <p className="text-xs text-muted-foreground">
-                {authenticated && "PKCE Auth Active"}
-                {webAuthenticated && "Web Client Auth Active"}
-              </p>
+              <p className="text-xs text-muted-foreground">Enterprise Data Portal</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
