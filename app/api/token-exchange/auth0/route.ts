@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
     const jagData = await jagResponse.json()
     const idJag = jagData.access_token
     console.log("[v0] Step 1 complete: ID-JAG received from Okta")
+    console.log("[v0] ID-JAG token:", idJag.substring(0, 50) + "...")
 
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
@@ -86,14 +87,14 @@ export async function POST(request: NextRequest) {
 
     const auth0RequestBody = {
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: idJag,
       client_id: auth0RequestingClientId,
       client_secret: auth0RequestingClientSecret,
-      scope: auth0Scope,
-      assertion: idJag,
     }
 
     console.log("[v0] Auth0 token endpoint:", auth0TokenEndpoint)
-    console.log("[v0] Auth0 scope:", auth0Scope)
+    console.log("[v0] Auth0 client_id:", auth0RequestingClientId)
+    console.log("[v0] Auth0 assertion (JAG):", idJag.substring(0, 50) + "...")
 
     const auth0Response = await fetch(auth0TokenEndpoint, {
       method: "POST",
@@ -110,7 +111,6 @@ export async function POST(request: NextRequest) {
       console.error("[v0] Auth0 token exchange failed:")
       console.error("[v0] Status:", auth0Response.status)
       console.error("[v0] Response:", errorText)
-      console.error("[v0] Request body:", auth0RequestBody)
       return NextResponse.json(
         { error: "Auth0 token exchange failed", details: errorText },
         { status: auth0Response.status }
