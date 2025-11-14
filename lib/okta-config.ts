@@ -38,3 +38,45 @@ export const OAUTH_ENDPOINTS = {
   authServerJwks: `${OKTA_CONFIG.authServerIssuer}/v1/keys`,
   metadata: `${OKTA_CONFIG.authServerIssuer}/.well-known/oauth-authorization-server`,
 }
+
+// Auth0 configuration for Finance API cross-app access
+export const AUTH0_CONFIG = {
+  audience: process.env.AUTH0_AUDIENCE || "",
+  resource: process.env.AUTH0_RESOURCE || "",
+  tokenEndpoint: process.env.AUTH0_TOKEN_ENDPOINT || "",
+  clientId: process.env.AUTH0_REQUESTING_APP_CLIENT_ID || "",
+  clientSecret: process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET || "",
+  scope: "finance:read",
+} as const
+
+export const OKTA_CAA_CONFIG = {
+  clientId: process.env.OKTA_REQUESTING_APP_CLIENT_ID || OKTA_CONFIG.clientId,
+  clientSecret: process.env.OKTA_REQUESTING_APP_CLIENT_SECRET || OKTA_CONFIG.clientSecret,
+} as const
+
+// Okta tenant configuration for web client auth (no PKCE)
+export const OKTA_WEB_CLIENT_CONFIG = {
+  clientId:
+    typeof window !== "undefined"
+      ? (window as any).NEXT_PUBLIC_OKTA_WEB_CLIENT_ID || process.env.NEXT_PUBLIC_OKTA_WEB_CLIENT_ID || ""
+      : process.env.OKTA_WEB_CLIENT_ID || "",
+  clientSecret: process.env.OKTA_WEB_CLIENT_SECRET || "",
+  orgDomain:
+    typeof window !== "undefined"
+      ? (window as any).NEXT_PUBLIC_OKTA_WEB_ORG_DOMAIN || process.env.NEXT_PUBLIC_OKTA_WEB_ORG_DOMAIN || ""
+      : process.env.OKTA_WEB_ORG_DOMAIN || "",
+  authServerIssuer:
+    typeof window !== "undefined"
+      ? (window as any).NEXT_PUBLIC_OKTA_WEB_AUTH_SERVER_ISSUER ||
+        process.env.NEXT_PUBLIC_OKTA_WEB_AUTH_SERVER_ISSUER ||
+        ""
+      : process.env.OKTA_WEB_AUTH_SERVER_ISSUER || "",
+  redirectUri: "/auth/web-callback",
+  scope: "openid profile email",
+} as const
+
+export const OKTA_WEB_ENDPOINTS = {
+  authorization: `${OKTA_WEB_CLIENT_CONFIG.orgDomain}/oauth2/v1/authorize`,
+  token: `${OKTA_WEB_CLIENT_CONFIG.orgDomain}/oauth2/v1/token`,
+  jwks: `${OKTA_WEB_CLIENT_CONFIG.orgDomain}/oauth2/v1/keys`,
+}
