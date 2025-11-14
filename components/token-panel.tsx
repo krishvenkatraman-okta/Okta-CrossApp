@@ -64,6 +64,12 @@ export function TokenPanel() {
         return "Access Token"
       case "id_jag_token":
         return "ID-JAG Token"
+      case "auth0_access_token":
+        return "Auth0 Access Token"
+      case "web_id_token":
+        return "Web ID Token"
+      case "web_access_token":
+        return "Web Access Token"
       default:
         return type
     }
@@ -77,6 +83,12 @@ export function TokenPanel() {
         return "OAuth 2.0 access token for resource access"
       case "id_jag_token":
         return "Cross-app access token (ID token for JAG)"
+      case "auth0_access_token":
+        return "Auth0 access token for financial resource API"
+      case "web_id_token":
+        return "Web Client ID token from Okta"
+      case "web_access_token":
+        return "Web Client access token"
       default:
         return ""
     }
@@ -103,7 +115,7 @@ export function TokenPanel() {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue={tokensArray[0]?.type} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={`grid w-full ${tokensArray.length === 2 ? 'grid-cols-2' : tokensArray.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
             {tokensArray.map((tokenInfo) => (
               <TabsTrigger key={tokenInfo.type} value={tokenInfo.type}>
                 {getTokenLabel(tokenInfo.type)}

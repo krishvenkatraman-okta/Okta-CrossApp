@@ -103,9 +103,14 @@ export async function POST(request: NextRequest) {
       body: new URLSearchParams(auth0RequestBody),
     })
 
+    console.log("[v0] Auth0 response status:", auth0Response.status)
+
     if (!auth0Response.ok) {
       const errorText = await auth0Response.text()
-      console.error("[v0] Auth0 token exchange failed:", errorText)
+      console.error("[v0] Auth0 token exchange failed:")
+      console.error("[v0] Status:", auth0Response.status)
+      console.error("[v0] Response:", errorText)
+      console.error("[v0] Request body:", auth0RequestBody)
       return NextResponse.json(
         { error: "Auth0 token exchange failed", details: errorText },
         { status: auth0Response.status }
@@ -114,6 +119,11 @@ export async function POST(request: NextRequest) {
 
     const auth0Data = await auth0Response.json()
     console.log("[v0] Step 2 complete: Auth0 access token received")
+    console.log("[v0] Auth0 token data:", { 
+      hasAccessToken: !!auth0Data.access_token, 
+      tokenType: auth0Data.token_type,
+      scope: auth0Data.scope 
+    })
 
     return NextResponse.json({
       accessToken: auth0Data.access_token,
