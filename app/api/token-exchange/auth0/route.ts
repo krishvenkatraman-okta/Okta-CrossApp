@@ -90,10 +90,12 @@ export async function POST(request: NextRequest) {
       assertion: idJag,
       client_id: auth0RequestingClientId,
       client_secret: auth0RequestingClientSecret,
+      scope: auth0Scope,
     }
 
     console.log("[v0] Auth0 token endpoint:", auth0TokenEndpoint)
     console.log("[v0] Auth0 client_id:", auth0RequestingClientId)
+    console.log("[v0] Auth0 scope:", auth0Scope)
     console.log("[v0] Auth0 assertion (JAG) first 100 chars:", idJag.substring(0, 100) + "...")
 
     let auth0Response
