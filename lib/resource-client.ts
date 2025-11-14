@@ -1,7 +1,7 @@
 "use client"
 
 import { getIdToken } from "./auth-client"
-import { getWebIdToken } from "./web-auth-client"
+import { getWebIdToken, isWebAuthenticated } from "./web-auth-client"
 import { tokenStore } from "./token-store"
 
 export interface EnterpriseDataResponse<T> {
@@ -15,36 +15,29 @@ export interface EnterpriseDataResponse<T> {
 }
 
 /**
- * Gets ID token from either PKCE auth or Web auth
+ * Gets ID token from PKCE auth only (for HR and KPI)
  */
-function getAnyIdToken(): string | null {
-  // Try PKCE auth first
-  const pkceToken = getIdToken()
-  if (pkceToken) {
-    console.log("[v0] Using PKCE ID token")
-    return pkceToken
-  }
-
-  // Try Web auth
-  const webToken = getWebIdToken()
-  if (webToken) {
-    console.log("[v0] Using Web Client ID token")
-    return webToken
-  }
-
-  return null
+function getPKCEIdToken(): string | null {
+  return getIdToken()
 }
 
 /**
- * Exchanges ID token for access token (ID-JAG)
+ * Gets ID token from Web auth only (for Finance)
+ */
+function getWebClientIdToken(): string | null {
+  return getWebIdToken()
+}
+
+/**
+ * Exchanges ID token for access token (ID-JAG) - PKCE flow only
  */
 async function getAccessToken(): Promise<string> {
-  const idToken = getAnyIdToken()
+  const idToken = getPKCEIdToken()
   if (!idToken) {
-    throw new Error("Not authenticated. Please log in first.")
+    throw new Error("Not authenticated. Please log in with PKCE flow first.")
   }
 
-  console.log("[v0] Requesting cross-app access token")
+  console.log("[v0] Requesting cross-app access token (PKCE)")
 
   const response = await fetch("/api/token-exchange", {
     method: "POST",
@@ -60,7 +53,7 @@ async function getAccessToken(): Promise<string> {
   }
 
   const data = await response.json()
-  console.log("[v0] Cross-app access token received")
+  console.log("[v0] Cross-app access token received (PKCE)")
 
   tokenStore.setToken("id_jag_token", data.accessToken)
 
@@ -68,15 +61,15 @@ async function getAccessToken(): Promise<string> {
 }
 
 /**
- * Exchanges ID token for Auth0 access token via ID-JAG
+ * Exchanges Web Client ID token for Auth0 access token via ID-JAG
  */
 async function getAuth0AccessToken(): Promise<string> {
-  const idToken = getAnyIdToken()
+  const idToken = getWebClientIdToken()
   if (!idToken) {
-    throw new Error("Not authenticated. Please log in first.")
+    throw new Error("Not authenticated. Please log in with Finance API Demo flow first.")
   }
 
-  console.log("[v0] Requesting Auth0 access token via ID-JAG")
+  console.log("[v0] Requesting Auth0 access token via ID-JAG (Web Client)")
 
   const response = await fetch("/api/token-exchange/auth0", {
     method: "POST",
@@ -102,7 +95,7 @@ async function getAuth0AccessToken(): Promise<string> {
 }
 
 /**
- * Fetches HR data from resource API
+ * Fetches HR data from resource API - PKCE flow only
  */
 export async function fetchHRData() {
   const accessToken = await getAccessToken()
@@ -124,7 +117,7 @@ export async function fetchHRData() {
 }
 
 /**
- * Fetches financial data from Auth0-protected resource API
+ * Fetches financial data from Auth0-protected resource API - Web Client flow only
  */
 export async function fetchFinancialData() {
   const accessToken = await getAuth0AccessToken()
@@ -146,7 +139,7 @@ export async function fetchFinancialData() {
 }
 
 /**
- * Fetches KPI data from resource API
+ * Fetches KPI data from resource API - PKCE flow only
  */
 export async function fetchKPIData() {
   const accessToken = await getAccessToken()
@@ -165,4 +158,13 @@ export async function fetchKPIData() {
   }
 
   return await response.json()
+}
+
+/**
+ * Check which auth method is active
+ */
+export function getAuthMethod(): "pkce" | "web" | null {
+  if (getPKCEIdToken()) return "pkce"
+  if (isWebAuthenticated()) return "web"
+  return null
 }

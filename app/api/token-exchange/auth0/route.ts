@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { OAUTH_ENDPOINTS, AUTH0_CONFIG, OKTA_CAA_CONFIG } from "@/lib/okta-config"
+import { OKTA_WEB_ENDPOINTS } from "@/lib/okta-config"
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,24 +9,48 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing idToken" }, { status: 400 })
     }
 
-    console.log("[v0] Step 1: Requesting ID-JAG from Okta for Auth0 audience")
+    const oktaRequestingClientId = process.env.OKTA_REQUESTING_APP_CLIENT_ID
+    const oktaRequestingClientSecret = process.env.OKTA_REQUESTING_APP_CLIENT_SECRET
+    const auth0Audience = process.env.AUTH0_AUDIENCE
+    const auth0Resource = process.env.AUTH0_RESOURCE
+    const auth0Scope = process.env.AUTH0_SCOPE || "finance:read"
+    const auth0TokenEndpoint = process.env.AUTH0_TOKEN_ENDPOINT
 
-    // Step 1: Exchange Okta ID token for ID-JAG
+    if (!oktaRequestingClientId || !oktaRequestingClientSecret) {
+      return NextResponse.json(
+        { error: "Missing Okta requesting app credentials" },
+        { status: 500 }
+      )
+    }
+
+    if (!auth0Audience || !auth0Resource || !auth0TokenEndpoint) {
+      return NextResponse.json(
+        { error: "Missing Auth0 configuration" },
+        { status: 500 }
+      )
+    }
+
+    console.log("[v0] Step 1: Requesting ID-JAG from Web Client Okta tenant for Auth0 audience")
+
+    // Step 1: Exchange Web Client ID token for ID-JAG from Web Client Okta tenant
     const jagRequestBody = {
       grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
       requested_token_type: "urn:ietf:params:oauth:token-type:id-jag",
-      audience: AUTH0_CONFIG.audience,
-      resource: AUTH0_CONFIG.resource,
+      audience: auth0Audience,
+      resource: auth0Resource,
       subject_token: idToken,
       subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-      client_id: OKTA_CAA_CONFIG.clientId,
-      client_secret: OKTA_CAA_CONFIG.clientSecret,
+      client_id: oktaRequestingClientId,
+      client_secret: oktaRequestingClientSecret,
+      scope: auth0Scope,
     }
 
-    console.log("[v0] JAG request - audience:", AUTH0_CONFIG.audience)
-    console.log("[v0] JAG request - resource:", AUTH0_CONFIG.resource)
+    console.log("[v0] JAG request to:", OKTA_WEB_ENDPOINTS.token)
+    console.log("[v0] JAG request - audience:", auth0Audience)
+    console.log("[v0] JAG request - resource:", auth0Resource)
+    console.log("[v0] JAG request - scope:", auth0Scope)
 
-    const jagResponse = await fetch(OAUTH_ENDPOINTS.token, {
+    const jagResponse = await fetch(OKTA_WEB_ENDPOINTS.token, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -37,7 +61,10 @@ export async function POST(request: NextRequest) {
     if (!jagResponse.ok) {
       const errorText = await jagResponse.text()
       console.error("[v0] ID-JAG exchange failed:", errorText)
-      return NextResponse.json({ error: "ID-JAG exchange failed", details: errorText }, { status: jagResponse.status })
+      return NextResponse.json(
+        { error: "ID-JAG exchange failed", details: errorText },
+        { status: jagResponse.status }
+      )
     }
 
     const jagData = await jagResponse.json()
@@ -47,18 +74,28 @@ export async function POST(request: NextRequest) {
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
 
+    const auth0RequestingClientId = process.env.AUTH0_REQUESTING_APP_CLIENT_ID
+    const auth0RequestingClientSecret = process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET
+
+    if (!auth0RequestingClientId || !auth0RequestingClientSecret) {
+      return NextResponse.json(
+        { error: "Missing Auth0 requesting app credentials" },
+        { status: 500 }
+      )
+    }
+
     const auth0RequestBody = {
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      client_id: AUTH0_CONFIG.clientId,
-      client_secret: AUTH0_CONFIG.clientSecret,
-      scope: AUTH0_CONFIG.scope,
+      client_id: auth0RequestingClientId,
+      client_secret: auth0RequestingClientSecret,
+      scope: auth0Scope,
       assertion: idJag,
     }
 
-    console.log("[v0] Auth0 token endpoint:", AUTH0_CONFIG.tokenEndpoint)
-    console.log("[v0] Auth0 scope:", AUTH0_CONFIG.scope)
+    console.log("[v0] Auth0 token endpoint:", auth0TokenEndpoint)
+    console.log("[v0] Auth0 scope:", auth0Scope)
 
-    const auth0Response = await fetch(AUTH0_CONFIG.tokenEndpoint, {
+    const auth0Response = await fetch(auth0TokenEndpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -71,7 +108,7 @@ export async function POST(request: NextRequest) {
       console.error("[v0] Auth0 token exchange failed:", errorText)
       return NextResponse.json(
         { error: "Auth0 token exchange failed", details: errorText },
-        { status: auth0Response.status },
+        { status: auth0Response.status }
       )
     }
 
@@ -92,7 +129,7 @@ export async function POST(request: NextRequest) {
         error: "Internal server error",
         message: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }
