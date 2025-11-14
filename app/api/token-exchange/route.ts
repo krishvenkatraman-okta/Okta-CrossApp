@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
       requested_token_type: "urn:ietf:params:oauth:token-type:id-jag",
       subject_token: idToken,
       subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-      client_id: OKTA_CONFIG.clientId,
       client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
       client_assertion: clientAssertion,
       audience: OKTA_CONFIG.authServerIssuer,
