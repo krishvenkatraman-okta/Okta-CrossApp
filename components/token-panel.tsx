@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { tokenStore } from "@/lib/token-store"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Copy, Check, Eye, EyeOff } from "@/components/icons"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface TokenInfo {
   type: string
@@ -20,16 +26,24 @@ export function TokenPanel() {
   const [tokens, setTokens] = useState<Map<string, TokenInfo>>(new Map())
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
   const [hiddenTokens, setHiddenTokens] = useState<Set<string>>(new Set())
+  const [selectedToken, setSelectedToken] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubscribe = tokenStore.subscribe((newTokens) => {
       setTokens(newTokens)
+      if (!selectedToken && newTokens.size > 0) {
+        setSelectedToken(Array.from(newTokens.keys())[0])
+      }
     })
 
-    setTokens(tokenStore.getAllTokens())
+    const allTokens = tokenStore.getAllTokens()
+    setTokens(allTokens)
+    if (!selectedToken && allTokens.size > 0) {
+      setSelectedToken(Array.from(allTokens.keys())[0])
+    }
 
     return unsubscribe
-  }, [])
+  }, [selectedToken])
 
   const copyToken = (type: string, token: string) => {
     navigator.clipboard.writeText(token)
@@ -107,103 +121,111 @@ export function TokenPanel() {
     )
   }
 
+  const currentToken = selectedToken ? tokens.get(selectedToken) : null
+
   return (
     <Card className="h-full">
       <CardHeader>
         <CardTitle>Token Inspector</CardTitle>
         <CardDescription>View all tokens in the authentication flow</CardDescription>
       </CardHeader>
-      <CardContent>
-        <Tabs defaultValue={tokensArray[0]?.type} className="w-full">
-          <TabsList className={`grid w-full ${tokensArray.length === 2 ? 'grid-cols-2' : tokensArray.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
-            {tokensArray.map((tokenInfo) => (
-              <TabsTrigger key={tokenInfo.type} value={tokenInfo.type}>
-                {getTokenLabel(tokenInfo.type)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Select Token</label>
+          <Select value={selectedToken || undefined} onValueChange={setSelectedToken}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a token to view" />
+            </SelectTrigger>
+            <SelectContent>
+              {tokensArray.map((tokenInfo) => (
+                <SelectItem key={tokenInfo.type} value={tokenInfo.type}>
+                  {getTokenLabel(tokenInfo.type)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-          {tokensArray.map((tokenInfo) => (
-            <TabsContent key={tokenInfo.type} value={tokenInfo.type} className="space-y-4">
+        {currentToken && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold">{getTokenLabel(currentToken.type)}</h3>
+                <p className="text-sm text-muted-foreground">{getTokenDescription(currentToken.type)}</p>
+              </div>
+              <Badge variant="secondary">{new Date(currentToken.timestamp).toLocaleTimeString()}</Badge>
+            </div>
+
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">{getTokenLabel(tokenInfo.type)}</h3>
-                  <p className="text-sm text-muted-foreground">{getTokenDescription(tokenInfo.type)}</p>
+                <label className="text-sm font-medium">JWT Token</label>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => toggleTokenVisibility(currentToken.type)}>
+                    {hiddenTokens.has(currentToken.type) ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => copyToken(currentToken.type, currentToken.token)}>
+                    {copiedToken === currentToken.type ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
-                <Badge variant="secondary">{new Date(tokenInfo.timestamp).toLocaleTimeString()}</Badge>
               </div>
+              <ScrollArea className="h-24 rounded-md border bg-muted/50 p-3">
+                <code className="break-all text-xs font-mono">{formatToken(currentToken.token, currentToken.type)}</code>
+              </ScrollArea>
+            </div>
 
+            {currentToken.decoded && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">JWT Token</label>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => toggleTokenVisibility(tokenInfo.type)}>
-                      {hiddenTokens.has(tokenInfo.type) ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => copyToken(tokenInfo.type, tokenInfo.token)}>
-                      {copiedToken === tokenInfo.type ? (
-                        <Check className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                <ScrollArea className="h-24 rounded-md border bg-muted/50 p-3">
-                  <code className="break-all text-xs font-mono">{formatToken(tokenInfo.token, tokenInfo.type)}</code>
+                <label className="text-sm font-medium">Decoded Payload</label>
+                <ScrollArea className="h-64 rounded-md border bg-muted/50 p-3">
+                  <pre className="text-xs">{JSON.stringify(currentToken.decoded, null, 2)}</pre>
                 </ScrollArea>
-              </div>
 
-              {tokenInfo.decoded && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Decoded Payload</label>
-                  <ScrollArea className="h-64 rounded-md border bg-muted/50 p-3">
-                    <pre className="text-xs">{JSON.stringify(tokenInfo.decoded, null, 2)}</pre>
-                  </ScrollArea>
-
-                  <div className="grid grid-cols-2 gap-2 pt-2">
-                    {tokenInfo.decoded.iss && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">Issuer</div>
-                        <div className="truncate text-sm font-mono">{tokenInfo.decoded.iss}</div>
-                      </div>
-                    )}
-                    {tokenInfo.decoded.sub && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">Subject</div>
-                        <div className="truncate text-sm font-mono">{tokenInfo.decoded.sub}</div>
-                      </div>
-                    )}
-                    {tokenInfo.decoded.aud && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">Audience</div>
-                        <div className="truncate text-sm font-mono">{tokenInfo.decoded.aud}</div>
-                      </div>
-                    )}
-                    {tokenInfo.decoded.client_id && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">Client ID</div>
-                        <div className="truncate text-sm font-mono">{tokenInfo.decoded.client_id}</div>
-                      </div>
-                    )}
-                    {tokenInfo.decoded.scope && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">Scope</div>
-                        <div className="text-sm font-mono">{tokenInfo.decoded.scope}</div>
-                      </div>
-                    )}
-                    {tokenInfo.decoded.exp && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">Expires</div>
-                        <div className="text-sm">{new Date(tokenInfo.decoded.exp * 1000).toLocaleString()}</div>
-                      </div>
-                    )}
-                  </div>
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  {currentToken.decoded.iss && (
+                    <div>
+                      <div className="text-xs text-muted-foreground">Issuer</div>
+                      <div className="truncate text-sm font-mono">{currentToken.decoded.iss}</div>
+                    </div>
+                  )}
+                  {currentToken.decoded.sub && (
+                    <div>
+                      <div className="text-xs text-muted-foreground">Subject</div>
+                      <div className="truncate text-sm font-mono">{currentToken.decoded.sub}</div>
+                    </div>
+                  )}
+                  {currentToken.decoded.aud && (
+                    <div>
+                      <div className="text-xs text-muted-foreground">Audience</div>
+                      <div className="truncate text-sm font-mono">{currentToken.decoded.aud}</div>
+                    </div>
+                  )}
+                  {currentToken.decoded.client_id && (
+                    <div>
+                      <div className="text-xs text-muted-foreground">Client ID</div>
+                      <div className="truncate text-sm font-mono">{currentToken.decoded.client_id}</div>
+                    </div>
+                  )}
+                  {currentToken.decoded.scope && (
+                    <div>
+                      <div className="text-xs text-muted-foreground">Scope</div>
+                      <div className="text-sm font-mono">{currentToken.decoded.scope}</div>
+                    </div>
+                  )}
+                  {currentToken.decoded.exp && (
+                    <div>
+                      <div className="text-xs text-muted-foreground">Expires</div>
+                      <div className="text-sm">{new Date(currentToken.decoded.exp * 1000).toLocaleString()}</div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </TabsContent>
-          ))}
-        </Tabs>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

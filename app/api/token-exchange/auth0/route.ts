@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const jagData = await jagResponse.json()
     const idJag = jagData.access_token
     console.log("[v0] Step 1 complete: ID-JAG received from Okta")
-    console.log("[v0] ID-JAG token:", idJag.substring(0, 50) + "...")
+    console.log("[v0] ID-JAG token (first 100 chars):", idJag.substring(0, 100) + "...")
 
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
@@ -94,25 +94,48 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Auth0 token endpoint:", auth0TokenEndpoint)
     console.log("[v0] Auth0 client_id:", auth0RequestingClientId)
-    console.log("[v0] Auth0 assertion (JAG):", idJag.substring(0, 50) + "...")
+    console.log("[v0] Auth0 assertion (JAG) first 100 chars:", idJag.substring(0, 100) + "...")
 
-    const auth0Response = await fetch(auth0TokenEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams(auth0RequestBody),
-    })
+    let auth0Response
+    try {
+      auth0Response = await fetch(auth0TokenEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams(auth0RequestBody),
+      })
+    } catch (fetchError) {
+      console.error("[v0] Auth0 fetch failed with network error:", fetchError)
+      return NextResponse.json(
+        { 
+          error: "Auth0 token exchange network error", 
+          details: fetchError instanceof Error ? fetchError.message : "Unknown network error" 
+        },
+        { status: 500 }
+      )
+    }
 
     console.log("[v0] Auth0 response status:", auth0Response.status)
+    console.log("[v0] Auth0 response headers:", Object.fromEntries(auth0Response.headers.entries()))
 
     if (!auth0Response.ok) {
       const errorText = await auth0Response.text()
       console.error("[v0] Auth0 token exchange failed:")
       console.error("[v0] Status:", auth0Response.status)
-      console.error("[v0] Response:", errorText)
+      console.error("[v0] Response body:", errorText)
+      
+      let errorDetails = errorText
+      try {
+        const errorJson = JSON.parse(errorText)
+        errorDetails = JSON.stringify(errorJson, null, 2)
+        console.error("[v0] Parsed error JSON:", errorJson)
+      } catch {
+        console.error("[v0] Error response is not JSON")
+      }
+      
       return NextResponse.json(
-        { error: "Auth0 token exchange failed", details: errorText },
+        { error: "Auth0 token exchange failed", details: errorDetails, status: auth0Response.status },
         { status: auth0Response.status }
       )
     }
@@ -134,10 +157,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("[v0] Token exchange error:", error)
+    console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack trace")
     return NextResponse.json(
       {
         error: "Internal server error",
         message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 }
     )
