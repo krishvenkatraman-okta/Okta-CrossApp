@@ -1,7 +1,15 @@
 "use client"
 
 // Token storage and event system for displaying tokens in the UI
-type TokenType = "id_token" | "access_token" | "id_jag_token" | "auth0_access_token" | "web_id_token" | "web_access_token"
+type TokenType = 
+  | "id_token" 
+  | "access_token" 
+  | "id_jag_token" 
+  | "auth0_access_token" 
+  | "web_id_token" 
+  | "web_access_token"
+  | "salesforce_id_jag_token"
+  | "salesforce_auth0_access_token"
 
 interface TokenInfo {
   type: TokenType

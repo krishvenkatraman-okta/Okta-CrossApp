@@ -3,7 +3,7 @@ import { OKTA_WEB_ENDPOINTS } from "@/lib/okta-config"
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = await request.json()
+    const { idToken, resourceType = "finance" } = await request.json()
 
     if (!idToken) {
       return NextResponse.json({ error: "Missing idToken" }, { status: 400 })
@@ -12,9 +12,15 @@ export async function POST(request: NextRequest) {
     const oktaRequestingClientId = process.env.OKTA_REQUESTING_APP_CLIENT_ID
     const oktaRequestingClientSecret = process.env.OKTA_REQUESTING_APP_CLIENT_SECRET
     const auth0Audience = process.env.AUTH0_AUDIENCE
-    const auth0Resource = process.env.AUTH0_RESOURCE
-    const auth0Scope = process.env.AUTH0_SCOPE || "finance:read"
     const auth0TokenEndpoint = process.env.AUTH0_TOKEN_ENDPOINT
+
+    const auth0Resource = resourceType === "salesforce" 
+      ? process.env.SALESFORCE_RESOURCE 
+      : process.env.AUTH0_RESOURCE
+    
+    const auth0Scope = resourceType === "salesforce"
+      ? "salesforce:read"
+      : (process.env.AUTH0_SCOPE || "finance:read")
 
     if (!oktaRequestingClientId || !oktaRequestingClientSecret) {
       return NextResponse.json(
@@ -30,9 +36,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log("[v0] Step 1: Requesting ID-JAG from Web Client Okta tenant for Auth0 audience")
+    console.log(`[v0] Step 1: Requesting ID-JAG for ${resourceType} from Web Client Okta tenant`)
 
-    // Step 1: Exchange Web Client ID token for ID-JAG from Web Client Okta tenant
     const jagRequestBody = {
       grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
       requested_token_type: "urn:ietf:params:oauth:token-type:id-jag",
@@ -72,7 +77,6 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Step 1 complete: ID-JAG received from Okta")
     console.log("[v0] ID-JAG token (first 100 chars):", idJag.substring(0, 100) + "...")
 
-    // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
 
     const auth0RequestingClientId = process.env.AUTH0_REQUESTING_APP_CLIENT_ID

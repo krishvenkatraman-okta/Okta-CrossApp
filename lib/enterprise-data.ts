@@ -28,6 +28,17 @@ export interface KPIData {
   period: string
 }
 
+// Adding Salesforce data interface
+export interface SalesforceData {
+  id: string
+  opportunityName: string
+  accountName: string
+  stage: string
+  amount: number
+  closeDate: string
+  probability: number
+}
+
 // Sample HR Data
 export const HR_DATA: Employee[] = [
   {
@@ -162,5 +173,54 @@ export const KPI_DATA: KPIData[] = [
     target: 4.0,
     trend: "down",
     period: "March 2025",
+  },
+]
+
+// Sample Salesforce Data
+export const SALESFORCE_DATA: SalesforceData[] = [
+  {
+    id: "sf001",
+    opportunityName: "Enterprise Cloud Migration",
+    accountName: "Acme Corporation",
+    stage: "Proposal/Price Quote",
+    amount: 500000,
+    closeDate: "2025-04-15",
+    probability: 75,
+  },
+  {
+    id: "sf002",
+    opportunityName: "Digital Transformation Project",
+    accountName: "Global Industries Inc",
+    stage: "Negotiation/Review",
+    amount: 850000,
+    closeDate: "2025-03-30",
+    probability: 90,
+  },
+  {
+    id: "sf003",
+    opportunityName: "Security Infrastructure Upgrade",
+    accountName: "TechStart Solutions",
+    stage: "Qualification",
+    amount: 250000,
+    closeDate: "2025-05-20",
+    probability: 50,
+  },
+  {
+    id: "sf004",
+    opportunityName: "AI Platform Implementation",
+    accountName: "Innovation Labs",
+    stage: "Closed Won",
+    amount: 1200000,
+    closeDate: "2025-02-28",
+    probability: 100,
+  },
+  {
+    id: "sf005",
+    opportunityName: "Mobile App Development",
+    accountName: "Retail Plus",
+    stage: "Prospecting",
+    amount: 180000,
+    closeDate: "2025-06-10",
+    probability: 25,
   },
 ]

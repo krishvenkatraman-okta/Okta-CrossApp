@@ -5,9 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { fetchHRData, fetchFinancialData, fetchKPIData, getAuthMethod } from "@/lib/resource-client"
-import type { Employee, FinancialData, KPIData } from "@/lib/enterprise-data"
-import { Loader2, Users, DollarSign, TrendingUp, AlertCircle, ArrowUp, ArrowDown, Minus } from "@/components/icons"
+import { fetchHRData, fetchFinancialData, fetchKPIData, fetchSalesforceData, getAuthMethod } from "@/lib/resource-client"
+import type { Employee, FinancialData, KPIData, SalesforceData } from "@/lib/enterprise-data"
+import { Loader2, Users, DollarSign, TrendingUp, AlertCircle, ArrowUp, ArrowDown, Minus, Cloud } from "@/components/icons"
 
 type DataState<T> = {
   data: T | null
@@ -29,6 +29,12 @@ export function EnterpriseDashboard() {
   })
 
   const [kpiState, setKpiState] = useState<DataState<KPIData[]>>({
+    data: null,
+    loading: false,
+    error: null,
+  })
+
+  const [salesforceState, setSalesforceState] = useState<DataState<SalesforceData[]>>({
     data: null,
     loading: false,
     error: null,
@@ -82,19 +88,33 @@ export function EnterpriseDashboard() {
     }
   }
 
+  const loadSalesforceData = async () => {
+    setSalesforceState({ data: null, loading: true, error: null })
+    try {
+      const response = await fetchSalesforceData()
+      setSalesforceState({ data: response.data, loading: false, error: null })
+    } catch (error) {
+      setSalesforceState({
+        data: null,
+        loading: false,
+        error: error instanceof Error ? error.message : "Failed to load Salesforce data",
+      })
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Enterprise Data</h2>
           <p className="text-muted-foreground">
-            Access your HR, Financial, and KPI data using Okta cross-app authentication
+            Access your HR, Financial, KPI, and Salesforce data using Okta cross-app authentication
           </p>
         </div>
       </div>
 
       <Tabs defaultValue={authMethod === "web" ? "financial" : "hr"} className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className="grid w-full max-w-md" style={{ gridTemplateColumns: authMethod === "web" ? "1fr 1fr" : "1fr 1fr" }}>
           {authMethod === "pkce" && (
             <>
               <TabsTrigger value="hr">HR Data</TabsTrigger>
@@ -102,7 +122,10 @@ export function EnterpriseDashboard() {
             </>
           )}
           {authMethod === "web" && (
-            <TabsTrigger value="financial">Financial</TabsTrigger>
+            <>
+              <TabsTrigger value="financial">Financial</TabsTrigger>
+              <TabsTrigger value="salesforce">Salesforce</TabsTrigger>
+            </>
           )}
         </TabsList>
 
@@ -354,6 +377,94 @@ export function EnterpriseDashboard() {
                 {!kpiState.data && !kpiState.error && !kpiState.loading && (
                   <div className="py-12 text-center text-muted-foreground">
                     Click "Load KPI Data" to fetch performance metrics
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {authMethod === "web" && (
+          <TabsContent value="salesforce" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-primary/10 p-2">
+                      <Cloud className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle>Salesforce Data</CardTitle>
+                      <CardDescription>View opportunities and pipeline data</CardDescription>
+                    </div>
+                  </div>
+                  <Button onClick={loadSalesforceData} disabled={salesforceState.loading} className="gap-2">
+                    {salesforceState.loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      "Load Salesforce Data"
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {salesforceState.error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{salesforceState.error}</AlertDescription>
+                  </Alert>
+                )}
+
+                {salesforceState.data && (
+                  <div className="space-y-4">
+                    <div className="rounded-lg border">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="border-b bg-muted/50">
+                            <tr>
+                              <th className="px-4 py-3 text-left font-medium">Opportunity</th>
+                              <th className="px-4 py-3 text-left font-medium">Account</th>
+                              <th className="px-4 py-3 text-left font-medium">Stage</th>
+                              <th className="px-4 py-3 text-right font-medium">Amount</th>
+                              <th className="px-4 py-3 text-right font-medium">Probability</th>
+                              <th className="px-4 py-3 text-left font-medium">Close Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {salesforceState.data.map((opp) => (
+                              <tr key={opp.id} className="border-b last:border-b-0">
+                                <td className="px-4 py-3 font-medium">{opp.opportunityName}</td>
+                                <td className="px-4 py-3">{opp.accountName}</td>
+                                <td className="px-4 py-3">
+                                  <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-primary/10 text-primary">
+                                    {opp.stage}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono text-green-600">
+                                  ${opp.amount.toLocaleString()}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  {opp.probability}%
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground">{opp.closeDate}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Showing {salesforceState.data.length} opportunities
+                    </p>
+                  </div>
+                )}
+
+                {!salesforceState.data && !salesforceState.error && !salesforceState.loading && (
+                  <div className="py-12 text-center text-muted-foreground">
+                    Click "Load Salesforce Data" to fetch opportunity information
                   </div>
                 )}
               </CardContent>
