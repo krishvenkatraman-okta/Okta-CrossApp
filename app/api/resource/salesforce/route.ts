@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.substring(7)
 
-    const claims = await validateAuth0Token(token)
+    const salesforceResource = process.env.SALESFORCE_RESOURCE
+    const claims = await validateAuth0Token(token, salesforceResource)
     console.log("[v0] Validated Auth0 access token for Salesforce resource")
 
     const scopes = claims.scope?.split(" ") || []

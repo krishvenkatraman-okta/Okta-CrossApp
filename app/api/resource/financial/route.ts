@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.substring(7)
 
-    const claims = await validateAuth0Token(token)
+    const claims = await validateAuth0Token(token, process.env.AUTH0_RESOURCE)
     console.log("[v0] Validated Auth0 access token for Financial resource")
 
     const scopes = claims.scope?.split(" ") || []

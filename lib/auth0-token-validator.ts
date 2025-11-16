@@ -12,8 +12,13 @@ interface Auth0TokenClaims {
 
 /**
  * Validates Auth0 access token by verifying with Auth0's JWKS
+ * @param token - The JWT token to validate
+ * @param expectedAudience - Optional expected audience. If not provided, uses AUTH0_CONFIG.resource
  */
-export async function validateAuth0Token(token: string): Promise<Auth0TokenClaims> {
+export async function validateAuth0Token(
+  token: string,
+  expectedAudience?: string
+): Promise<Auth0TokenClaims> {
   try {
     console.log("[v0] Validating Auth0 access token")
 
@@ -33,10 +38,11 @@ export async function validateAuth0Token(token: string): Promise<Auth0TokenClaim
     }
 
     // Verify audience if configured
-    if (AUTH0_CONFIG.resource) {
+    const audienceToValidate = expectedAudience || AUTH0_CONFIG.resource
+    if (audienceToValidate) {
       const audience = Array.isArray(payload.aud) ? payload.aud : [payload.aud]
-      if (!audience.includes(AUTH0_CONFIG.resource)) {
-        throw new Error(`Invalid audience. Expected: ${AUTH0_CONFIG.resource}`)
+      if (!audience.includes(audienceToValidate)) {
+        throw new Error(`Invalid audience. Expected: ${audienceToValidate}`)
       }
     }
 
