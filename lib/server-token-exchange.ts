@@ -51,30 +51,35 @@ export async function requestIdJag(idToken: string, resource: string, audience: 
 /**
  * Exchange ID-JAG for Auth0 access token
  */
-export async function exchangeIdJagForAuth0Token(idJag: string, resourceType?: string): Promise<string> {
+export async function exchangeIdJagForAuth0Token(
+  idJag: string, 
+  tokenEndpoint: string,
+  clientId: string,
+  clientSecret: string,
+  scope: string,
+  audience?: string
+): Promise<string> {
   console.log("[v0] Exchanging ID-JAG for Auth0 access token")
-  console.log("[v0] - Resource type:", resourceType || 'finance')
+  console.log("[v0] - Token endpoint:", tokenEndpoint)
+  console.log("[v0] - Scope:", scope)
+  console.log("[v0] - Audience:", audience || 'default')
   
-  let scope = "finance:read"
-  
-  if (resourceType === 'salesforce') {
-    scope = "salesforce:read"
-  } else if (resourceType === 'me') {
-    scope = "create:me:connected_accounts"
-  }
-  
-  const auth0RequestBody = new URLSearchParams({
+  const requestParams: Record<string, string> = {
     grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
     assertion: idJag,
-    client_id: process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
-    client_secret: process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
+    client_id: clientId,
+    client_secret: clientSecret,
     scope,
-  })
+  }
+  
+  // Add audience if provided (required for ME API)
+  if (audience) {
+    requestParams.audience = audience
+  }
+  
+  const auth0RequestBody = new URLSearchParams(requestParams)
 
-  console.log("[v0] - Auth0 endpoint:", process.env.AUTH0_TOKEN_ENDPOINT)
-  console.log("[v0] - Scope:", scope)
-
-  const auth0Response = await fetch(process.env.AUTH0_TOKEN_ENDPOINT!, {
+  const auth0Response = await fetch(tokenEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: auth0RequestBody,
@@ -88,6 +93,7 @@ export async function exchangeIdJagForAuth0Token(idJag: string, resourceType?: s
 
   const auth0Data = await auth0Response.json()
   console.log("[v0] Auth0 access token received")
+  console.log("[v0] - Token preview:", auth0Data.access_token.substring(0, 50) + '...')
   
   return auth0Data.access_token
 }
@@ -109,7 +115,7 @@ export async function exchangeForAuth0Token(idToken: string): Promise<TokenExcha
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
     
-    const accessToken = await exchangeIdJagForAuth0Token(idJag)
+    const accessToken = await exchangeIdJagForAuth0Token(idJag, process.env.AUTH0_TOKEN_ENDPOINT!, process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, "finance:read")
     console.log("[v0] Step 2 ✓: Auth0 access token received")
     console.log("[v0] ===== AUTH0 TOKEN EXCHANGE (FINANCE) COMPLETED =====")
 
@@ -141,7 +147,7 @@ export async function exchangeForSalesforceAuth0Token(idToken: string): Promise<
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
     
-    const accessToken = await exchangeIdJagForAuth0Token(idJag, 'salesforce')
+    const accessToken = await exchangeIdJagForAuth0Token(idJag, process.env.AUTH0_TOKEN_ENDPOINT!, process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, "salesforce:read")
     console.log("[v0] Step 2 ✓: Auth0 access token received for Salesforce")
     console.log("[v0] ===== AUTH0 TOKEN EXCHANGE (SALESFORCE) COMPLETED =====")
 

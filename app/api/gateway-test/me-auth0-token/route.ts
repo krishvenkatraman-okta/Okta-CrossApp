@@ -18,10 +18,11 @@ export async function POST(request: NextRequest) {
     const auth0ClientId = process.env.AUTH0_REQUESTING_APP_CLIENT_ID
     const auth0ClientSecret = process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET
     const meScope = 'create:me:connected_accounts'
+    const auth0Domain = process.env.AUTH0_DOMAIN // Assuming AUTH0_DOMAIN is available in environment variables
     
-    if (!auth0TokenEndpoint || !auth0ClientId || !auth0ClientSecret) {
+    if (!auth0TokenEndpoint || !auth0ClientId || !auth0ClientSecret || !auth0Domain) {
       return NextResponse.json(
-        { message: 'Auth0 configuration missing (TOKEN_ENDPOINT, CLIENT_ID, or CLIENT_SECRET)' },
+        { message: 'Auth0 configuration missing (TOKEN_ENDPOINT, CLIENT_ID, CLIENT_SECRET, or DOMAIN)' },
         { status: 500 }
       )
     }
@@ -29,12 +30,16 @@ export async function POST(request: NextRequest) {
     console.log(`[v0]   Scope: ${meScope}`)
     console.log(`[v0]   Token Endpoint: ${auth0TokenEndpoint}`)
     
+    const meAudience = `${auth0Domain}/me/`
+    console.log(`[v0]   Audience: ${meAudience}`)
+    
     const accessToken = await exchangeIdJagForAuth0Token(
       idJagToken,
       auth0TokenEndpoint,
       auth0ClientId,
       auth0ClientSecret,
-      meScope
+      meScope,
+      meAudience // Add ME API audience
     )
     
     console.log('[v0] Gateway Test: ME Auth0 Access Token received')
