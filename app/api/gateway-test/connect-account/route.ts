@@ -22,8 +22,10 @@ export async function POST(request: NextRequest) {
       )
     }
     
+    const origin = request.headers.get('origin') || request.headers.get('host') || 'http://localhost:3000'
+    const redirectUri = `${origin}/agent/connect-callback`
+    
     const connectUrl = `${auth0Domain}/me/v1/connected-accounts/connect`
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/agent/connect-callback`
     
     console.log(`[v0]   Connect URL: ${connectUrl}`)
     console.log(`[v0]   Redirect URI: ${redirectUri}`)
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
         connection: 'Salesforce',
         redirect_uri: redirectUri,
         state: crypto.randomUUID(),
-        scopes: ['openid', 'profile']
+        scopes: ['openid', 'profile'] // Already correct - array format required by Auth0
       })
     })
     
