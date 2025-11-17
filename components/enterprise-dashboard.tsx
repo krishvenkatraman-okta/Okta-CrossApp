@@ -8,6 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fetchHRData, fetchFinancialData, fetchKPIData, fetchSalesforceData, getAuthMethod } from "@/lib/resource-client"
 import type { Employee, FinancialData, KPIData, SalesforceData } from "@/lib/enterprise-data"
 import { Loader2, Users, DollarSign, TrendingUp, AlertCircle, ArrowUp, ArrowDown, Minus, Cloud } from "@/components/icons"
+import { testSalesforceGatewayFlow } from "@/lib/gateway-test-client"
+import type { GatewayTestResult } from "@/lib/gateway-test-client"
+import { tokenStore } from "@/lib/token-store"
 
 type DataState<T> = {
   data: T | null
@@ -41,6 +44,9 @@ export function EnterpriseDashboard() {
   })
 
   const [authMethod, setAuthMethod] = useState<"pkce" | "web" | null>(null)
+
+  const [gatewayTestResult, setGatewayTestResult] = useState<GatewayTestResult | null>(null)
+  const [isTestingGateway, setIsTestingGateway] = useState(false)
 
   useEffect(() => {
     setAuthMethod(getAuthMethod())
@@ -99,6 +105,37 @@ export function EnterpriseDashboard() {
         loading: false,
         error: error instanceof Error ? error.message : "Failed to load Salesforce data",
       })
+    }
+  }
+
+  const testGatewayFlow = async () => {
+    setIsTestingGateway(true)
+    setGatewayTestResult(null)
+    
+    try {
+      const result = await testSalesforceGatewayFlow()
+      setGatewayTestResult(result)
+      
+      // Store all tokens in the token panel
+      if (result.tokens.idToken) {
+        tokenStore.setToken('web_id_token', result.tokens.idToken)
+      }
+      if (result.tokens.idJagToken) {
+        tokenStore.setToken('salesforce_id_jag_token', result.tokens.idJagToken)
+      }
+      if (result.tokens.auth0AccessToken) {
+        tokenStore.setToken('salesforce_auth0_access_token', result.tokens.auth0AccessToken)
+      }
+      if (result.tokens.meIdJagToken) {
+        tokenStore.setToken('me_id_jag_token', result.tokens.meIdJagToken)
+      }
+      if (result.tokens.meAuth0AccessToken) {
+        tokenStore.setToken('me_auth0_access_token', result.tokens.meAuth0AccessToken)
+      }
+    } catch (error) {
+      console.error('Gateway test failed:', error)
+    } finally {
+      setIsTestingGateway(false)
     }
   }
 
@@ -398,19 +435,54 @@ export function EnterpriseDashboard() {
                       <CardDescription>View opportunities and pipeline data</CardDescription>
                     </div>
                   </div>
-                  <Button onClick={loadSalesforceData} disabled={salesforceState.loading} className="gap-2">
-                    {salesforceState.loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      "Load Salesforce Data"
-                    )}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={testGatewayFlow} 
+                      disabled={isTestingGateway}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      {isTestingGateway ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Testing...
+                        </>
+                      ) : (
+                        "Test Gateway Flow"
+                      )}
+                    </Button>
+                    <Button onClick={loadSalesforceData} disabled={salesforceState.loading} className="gap-2">
+                      {salesforceState.loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        "Load Salesforce Data"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
+                {gatewayTestResult && (
+                  <Alert variant={gatewayTestResult.success ? "default" : "destructive"} className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <div className="space-y-2">
+                        <div className="font-semibold">
+                          {gatewayTestResult.success ? 'Gateway test successful!' : 'Gateway test failed'}
+                        </div>
+                        <div className="text-xs space-y-1 font-mono">
+                          {gatewayTestResult.logs.map((log, i) => (
+                            <div key={i}>{log}</div>
+                          ))}
+                        </div>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {salesforceState.error && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />

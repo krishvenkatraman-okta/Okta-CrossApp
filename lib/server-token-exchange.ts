@@ -10,6 +10,88 @@ interface TokenExchangeResult {
   accessToken: string
 }
 
+
+/**
+ * Request ID-JAG token from Okta
+ */
+export async function requestIdJag(idToken: string, resource: string, audience: string): Promise<string> {
+  console.log("[v0] Requesting ID-JAG from Okta")
+  console.log("[v0] - Resource:", resource)
+  console.log("[v0] - Audience:", audience)
+  
+  const jagRequestBody = new URLSearchParams({
+    grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+    requested_token_type: "urn:ietf:params:oauth:token-type:id-jag",
+    audience,
+    resource,
+    subject_token: idToken,
+    subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+    client_id: process.env.OKTA_REQUESTING_APP_CLIENT_ID!,
+    client_secret: process.env.OKTA_REQUESTING_APP_CLIENT_SECRET!,
+  })
+
+  const jagResponse = await fetch(OKTA_WEB_ENDPOINTS.token, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: jagRequestBody,
+  })
+
+  if (!jagResponse.ok) {
+    const errorText = await jagResponse.text()
+    console.error("[v0] ID-JAG exchange failed:", errorText)
+    throw new Error(`ID-JAG exchange failed: ${errorText}`)
+  }
+
+  const jagData = await jagResponse.json()
+  console.log("[v0] ID-JAG received")
+  
+  return jagData.access_token
+}
+
+/**
+ * Exchange ID-JAG for Auth0 access token
+ */
+export async function exchangeIdJagForAuth0Token(idJag: string, resourceType?: string): Promise<string> {
+  console.log("[v0] Exchanging ID-JAG for Auth0 access token")
+  console.log("[v0] - Resource type:", resourceType || 'finance')
+  
+  let scope = "finance:read"
+  
+  if (resourceType === 'salesforce') {
+    scope = "salesforce:read"
+  } else if (resourceType === 'me') {
+    scope = "create:me:connected_accounts"
+  }
+  
+  const auth0RequestBody = new URLSearchParams({
+    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+    assertion: idJag,
+    client_id: process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
+    client_secret: process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
+    scope,
+  })
+
+  console.log("[v0] - Auth0 endpoint:", process.env.AUTH0_TOKEN_ENDPOINT)
+  console.log("[v0] - Scope:", scope)
+
+  const auth0Response = await fetch(process.env.AUTH0_TOKEN_ENDPOINT!, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: auth0RequestBody,
+  })
+
+  if (!auth0Response.ok) {
+    const errorText = await auth0Response.text()
+    console.error("[v0] Auth0 token exchange failed:", errorText)
+    throw new Error(`Auth0 token exchange failed: ${errorText}`)
+  }
+
+  const auth0Data = await auth0Response.json()
+  console.log("[v0] Auth0 access token received")
+  
+  return auth0Data.access_token
+}
+
 /**
  * Server-side: Exchange ID token for Auth0 access token for Finance
  */
@@ -22,64 +104,18 @@ export async function exchangeForAuth0Token(idToken: string): Promise<TokenExcha
     // Step 1: Get ID-JAG from Okta
     console.log("[v0] Step 1: Requesting ID-JAG from Okta")
     
-    const jagRequestBody = new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
-      requested_token_type: "urn:ietf:params:oauth:token-type:id-jag",
-      audience: process.env.AUTH0_AUDIENCE!,
-      resource: process.env.AUTH0_RESOURCE!,
-      subject_token: idToken,
-      subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-      client_id: process.env.OKTA_REQUESTING_APP_CLIENT_ID!,
-      client_secret: process.env.OKTA_REQUESTING_APP_CLIENT_SECRET!,
-      scope: process.env.AUTH0_SCOPE || "finance:read",
-    })
-
-    const jagResponse = await fetch(OKTA_WEB_ENDPOINTS.token, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: jagRequestBody,
-    })
-
-    if (!jagResponse.ok) {
-      const errorText = await jagResponse.text()
-      console.error("[v0] ID-JAG exchange failed:", errorText)
-      throw new Error(`ID-JAG exchange failed: ${errorText}`)
-    }
-
-    const jagData = await jagResponse.json()
-    const idJag = jagData.access_token
-    console.log("[v0] Step 1 ✓: ID-JAG received")
+    const idJag = await requestIdJag(idToken, process.env.FINANCE_RESOURCE!, process.env.AUTH0_AUDIENCE!)
 
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
     
-    const auth0RequestBody = new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: idJag,
-      client_id: process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
-      client_secret: process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
-      scope: process.env.AUTH0_SCOPE || "finance:read",
-    })
-
-    const auth0Response = await fetch(process.env.AUTH0_TOKEN_ENDPOINT!, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: auth0RequestBody,
-    })
-
-    if (!auth0Response.ok) {
-      const errorText = await auth0Response.text()
-      console.error("[v0] Auth0 token exchange failed:", errorText)
-      throw new Error(`Auth0 token exchange failed: ${errorText}`)
-    }
-
-    const auth0Data = await auth0Response.json()
+    const accessToken = await exchangeIdJagForAuth0Token(idJag)
     console.log("[v0] Step 2 ✓: Auth0 access token received")
     console.log("[v0] ===== AUTH0 TOKEN EXCHANGE (FINANCE) COMPLETED =====")
 
     return {
       idJag,
-      accessToken: auth0Data.access_token,
+      accessToken,
     }
   } catch (error) {
     console.error("[v0] ===== AUTH0 TOKEN EXCHANGE (FINANCE) FAILED =====")
@@ -100,70 +136,18 @@ export async function exchangeForSalesforceAuth0Token(idToken: string): Promise<
     // Step 1: Get ID-JAG from Okta with Salesforce resource
     console.log("[v0] Step 1: Requesting ID-JAG from Okta with Salesforce resource")
     
-    const jagRequestBody = new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
-      requested_token_type: "urn:ietf:params:oauth:token-type:id-jag",
-      audience: process.env.AUTH0_AUDIENCE!,
-      resource: process.env.SALESFORCE_RESOURCE!,
-      subject_token: idToken,
-      subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-      client_id: process.env.OKTA_REQUESTING_APP_CLIENT_ID!,
-      client_secret: process.env.OKTA_REQUESTING_APP_CLIENT_SECRET!,
-      scope: "salesforce:read",
-    })
-
-    console.log("[v0] - Okta endpoint:", OKTA_WEB_ENDPOINTS.token)
-    console.log("[v0] - Audience:", process.env.AUTH0_AUDIENCE)
-    console.log("[v0] - Resource:", process.env.SALESFORCE_RESOURCE)
-
-    const jagResponse = await fetch(OKTA_WEB_ENDPOINTS.token, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: jagRequestBody,
-    })
-
-    if (!jagResponse.ok) {
-      const errorText = await jagResponse.text()
-      console.error("[v0] ID-JAG exchange failed:", errorText)
-      throw new Error(`ID-JAG exchange failed: ${errorText}`)
-    }
-
-    const jagData = await jagResponse.json()
-    const idJag = jagData.access_token
-    console.log("[v0] Step 1 ✓: ID-JAG received for Salesforce")
+    const idJag = await requestIdJag(idToken, process.env.SALESFORCE_RESOURCE!, process.env.AUTH0_AUDIENCE!)
 
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
     
-    const auth0RequestBody = new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: idJag,
-      client_id: process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
-      client_secret: process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
-      scope: "salesforce:read",
-    })
-
-    console.log("[v0] - Auth0 endpoint:", process.env.AUTH0_TOKEN_ENDPOINT)
-
-    const auth0Response = await fetch(process.env.AUTH0_TOKEN_ENDPOINT!, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: auth0RequestBody,
-    })
-
-    if (!auth0Response.ok) {
-      const errorText = await auth0Response.text()
-      console.error("[v0] Auth0 token exchange failed:", errorText)
-      throw new Error(`Auth0 token exchange failed: ${errorText}`)
-    }
-
-    const auth0Data = await auth0Response.json()
+    const accessToken = await exchangeIdJagForAuth0Token(idJag, 'salesforce')
     console.log("[v0] Step 2 ✓: Auth0 access token received for Salesforce")
     console.log("[v0] ===== AUTH0 TOKEN EXCHANGE (SALESFORCE) COMPLETED =====")
 
     return {
       idJag,
-      accessToken: auth0Data.access_token,
+      accessToken,
     }
   } catch (error) {
     console.error("[v0] ===== AUTH0 TOKEN EXCHANGE (SALESFORCE) FAILED =====")
