@@ -10,6 +10,9 @@ type TokenType =
   | "web_access_token"
   | "salesforce_id_jag_token"
   | "salesforce_auth0_access_token"
+  | "me_id_jag_token"
+  | "me_auth0_access_token"
+  | "salesforce_final_access_token"
 
 interface TokenInfo {
   type: TokenType
@@ -33,6 +36,30 @@ class TokenStore {
       decoded,
     })
     this.notifyListeners()
+  }
+
+  setTokensFromServerResponse(data: {
+    idJag?: string
+    accessToken?: string
+    meIdJag?: string
+    meAccessToken?: string
+    salesforceAccessToken?: string
+  }) {
+    if (data.idJag) {
+      this.setToken("salesforce_id_jag_token", data.idJag)
+    }
+    if (data.accessToken) {
+      this.setToken("salesforce_auth0_access_token", data.accessToken)
+    }
+    if (data.meIdJag) {
+      this.setToken("me_id_jag_token" as TokenType, data.meIdJag)
+    }
+    if (data.meAccessToken) {
+      this.setToken("me_auth0_access_token" as TokenType, data.meAccessToken)
+    }
+    if (data.salesforceAccessToken) {
+      this.setToken("salesforce_final_access_token" as TokenType, data.salesforceAccessToken)
+    }
   }
 
   getToken(type: TokenType): TokenInfo | undefined {

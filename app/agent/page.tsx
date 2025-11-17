@@ -17,11 +17,13 @@ import {
 } from "@/lib/gateway-client"
 import { getSalesforceAuth0AccessToken, getAuth0AccessToken } from "@/lib/resource-client"
 import { tokenStore } from "@/lib/token-store"
+import { TokenPanel } from "@/components/token-panel"
 
 export default function AgentPage() {
   const [authenticated, setAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState("")
+  const [showTokens, setShowTokens] = useState(false)
   const [pendingConnection, setPendingConnection] = useState<{
     connectUri: string
     ticket: string
@@ -36,6 +38,47 @@ export default function AgentPage() {
     setAuthenticated(isWebAuthenticated())
     setLoading(false)
   }, [])
+
+  useEffect(() => {
+    messages.forEach((message) => {
+      if (message.role === "assistant") {
+        message.parts.forEach((part) => {
+          if (part.type === "text" && part.text) {
+            try {
+              const tokenMatch = part.text.match(/\[TOKENS\](.*?)\[\/TOKENS\]/s)
+              if (tokenMatch) {
+                const tokenData = JSON.parse(tokenMatch[1])
+                tokenStore.setTokensFromServerResponse(tokenData)
+              }
+            } catch (e) {
+              // Not token data, ignore
+            }
+          }
+        })
+      }
+    })
+  }, [messages])
+
+  useEffect(() => {
+    messages.forEach((message) => {
+      if (message.role === "assistant") {
+        message.parts.forEach((part) => {
+          if (part.type === "tool-result" && part.result) {
+            const result = part.result as any
+            if (result.tokens) {
+              // Store tokens from tool execution
+              if (result.tokens.idJag) {
+                tokenStore.setToken("salesforce_id_jag_token", result.tokens.idJag)
+              }
+              if (result.tokens.accessToken) {
+                tokenStore.setToken("salesforce_auth0_access_token", result.tokens.accessToken)
+              }
+            }
+          }
+        })
+      }
+    })
+  }, [messages])
 
   const handleLogout = () => {
     clearWebTokens()
@@ -53,11 +96,9 @@ export default function AgentPage() {
   const handleConnectAccount = () => {
     if (!pendingConnection) return
 
-    // Open the connect URI in a new window
     const connectUrl = `${pendingConnection.connectUri}?ticket=${pendingConnection.ticket}`
     window.open(connectUrl, "_blank", "width=600,height=700")
 
-    // Store for later completion
     sessionStorage.setItem("pendingAuthSession", pendingConnection.authSession)
   }
 
@@ -106,106 +147,119 @@ export default function AgentPage() {
               </p>
             </div>
           </div>
-          <Button onClick={handleLogout} variant="outline" className="gap-2">
-            Sign Out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setShowTokens(!showTokens)} variant="outline" size="sm">
+              {showTokens ? "Hide Tokens" : "Show Tokens"}
+            </Button>
+            <Button onClick={handleLogout} variant="outline" className="gap-2">
+              Sign Out
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="container mx-auto flex flex-1 flex-col p-4">
-        <div className="mx-auto w-full max-w-4xl flex-1 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Chat with AI Agent</CardTitle>
-              <CardDescription>
-                Ask the agent to retrieve Salesforce data, financial information, or other enterprise resources
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex h-[500px] flex-col gap-4 overflow-y-auto rounded-lg border bg-muted/20 p-4">
-                  {messages.length === 0 && (
-                    <div className="flex flex-1 items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <p className="mb-2 text-sm font-medium">Welcome! Try asking:</p>
-                        <ul className="space-y-1 text-xs">
-                          <li>• "Get Salesforce opportunities"</li>
-                          <li>• "Show me financial data"</li>
-                          <li>• "What are the latest sales leads?"</li>
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                          message.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-secondary text-secondary-foreground"
-                        }`}
-                      >
-                        {message.parts.map((part, index) => {
-                          if (part.type === "text") {
-                            return (
-                              <p key={index} className="whitespace-pre-wrap">
-                                {part.text}
-                              </p>
-                            )
-                          }
-                          return null
-                        })}
-                      </div>
-                    </div>
-                  ))}
-
-                  {status === "in_progress" && (
-                    <div className="flex justify-start">
-                      <div className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-secondary-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-sm">Thinking...</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask the agent to retrieve data..."
-                    disabled={status === "in_progress"}
-                    className="flex-1"
-                  />
-                  <Button type="submit" disabled={status === "in_progress" || !input.trim()}>
-                    {status === "in_progress" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
-                </form>
-              </div>
-            </CardContent>
-          </Card>
-
-          {pendingConnection && (
-            <Card className="border-orange-500">
+        <div className="mx-auto flex w-full max-w-7xl flex-1 gap-4">
+          <div className="flex-1 space-y-4">
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <XCircle className="h-5 w-5 text-orange-500" />
-                  Connected Account Required
-                </CardTitle>
+                <CardTitle>Chat with AI Agent</CardTitle>
                 <CardDescription>
-                  The gateway needs access to your Salesforce account. Click below to connect.
+                  Ask the agent to retrieve Salesforce data, financial information, or other enterprise resources
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={handleConnectAccount} className="w-full">
-                  Connect Salesforce Account
-                </Button>
+                <div className="space-y-4">
+                  <div className="flex h-[500px] flex-col gap-4 overflow-y-auto rounded-lg border bg-muted/20 p-4">
+                    {messages.length === 0 && (
+                      <div className="flex flex-1 items-center justify-center text-muted-foreground">
+                        <div className="text-center">
+                          <p className="mb-2 text-sm font-medium">Welcome! Try asking:</p>
+                          <ul className="space-y-1 text-xs">
+                            <li>• "Get Salesforce opportunities"</li>
+                            <li>• "Show me financial data"</li>
+                            <li>• "What are the latest sales leads?"</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                            message.role === "user"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-secondary text-secondary-foreground"
+                          }`}
+                        >
+                          {message.parts.map((part, index) => {
+                            if (part.type === "text") {
+                              return (
+                                <p key={index} className="whitespace-pre-wrap">
+                                  {part.text}
+                                </p>
+                              )
+                            }
+                            return null
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    {status === "in_progress" && (
+                      <div className="flex justify-start">
+                        <div className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-secondary-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm">Thinking...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <form onSubmit={handleSendMessage} className="flex gap-2">
+                    <Input
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Ask the agent to retrieve data..."
+                      disabled={status === "in_progress"}
+                      className="flex-1"
+                    />
+                    <Button type="submit" disabled={status === "in_progress" || !input.trim()}>
+                      {status === "in_progress" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </form>
+                </div>
               </CardContent>
             </Card>
+
+            {pendingConnection && (
+              <Card className="border-orange-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <XCircle className="h-5 w-5 text-orange-500" />
+                    Connected Account Required
+                  </CardTitle>
+                  <CardDescription>
+                    The gateway needs access to your Salesforce account. Click below to connect.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button onClick={handleConnectAccount} className="w-full">
+                    Connect Salesforce Account
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {showTokens && (
+            <div className="w-96">
+              <TokenPanel />
+            </div>
           )}
         </div>
       </main>

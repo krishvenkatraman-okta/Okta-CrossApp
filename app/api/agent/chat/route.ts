@@ -19,7 +19,7 @@ function createTools(req: Request) {
           throw new Error("Not authenticated. Please log in with Okta Gateway first.")
         }
 
-        const { accessToken } = await exchangeForSalesforceAuth0Token(idToken)
+        const { idJag, accessToken } = await exchangeForSalesforceAuth0Token(idToken)
         console.log("[v0] Salesforce Auth0 token obtained")
 
         const gatewayMode = process.env.GATEWAY_MODE === "true"
@@ -28,7 +28,6 @@ function createTools(req: Request) {
         if (gatewayMode && gatewayUrl) {
           console.log("[v0] Making gateway request for Salesforce", dataType)
 
-          // Map dataType to Salesforce API endpoint
           const endpointMap: Record<string, string> = {
             opportunities: "/services/data/v57.0/query?q=SELECT+Id,Name,Amount,StageName+FROM+Opportunity+LIMIT+10",
             leads: "/services/data/v57.0/query?q=SELECT+Id,Name,Company,Status+FROM+Lead+LIMIT+10",
@@ -55,6 +54,7 @@ function createTools(req: Request) {
                 requiresConnection: true,
                 message: "Connected account required. Please connect your Salesforce account.",
                 error: errorData.error,
+                tokens: { idJag, accessToken }, // Include tokens for display
               }
             }
 
@@ -69,6 +69,7 @@ function createTools(req: Request) {
             dataType,
             data,
             message: `Successfully retrieved ${dataType} from Salesforce`,
+            tokens: { idJag, accessToken }, // Include tokens for display
           }
         } else {
           console.log("[v0] Gateway mode disabled, returning mock data")
@@ -77,6 +78,7 @@ function createTools(req: Request) {
             dataType,
             message: `Gateway mode is not enabled. Enable GATEWAY_MODE=true to use the gateway.`,
             mockData: true,
+            tokens: { idJag, accessToken }, // Include tokens for display
           }
         }
       } catch (error) {
@@ -104,7 +106,7 @@ function createTools(req: Request) {
           throw new Error("Not authenticated. Please log in with Okta Gateway first.")
         }
 
-        const { accessToken } = await exchangeForAuth0Token(idToken)
+        const { idJag, accessToken } = await exchangeForAuth0Token(idToken)
         console.log("[v0] Financial Auth0 token obtained")
 
         const response = await fetch(`${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/resource/financial`, {
@@ -125,6 +127,7 @@ function createTools(req: Request) {
           dataType,
           data,
           message: `Successfully retrieved ${dataType} financial data`,
+          tokens: { idJag, accessToken }, // Include tokens for display
         }
       } catch (error) {
         console.error("[v0] Error in getFinancialData tool:", error)
@@ -158,7 +161,9 @@ When a user asks for Salesforce data, use the getSalesforceData tool.
 When a user asks for financial data, use the getFinancialData tool.
 
 Always explain what you're doing and present the results in a clear, user-friendly format.
-If a tool returns an error or requires a connected account, explain this to the user clearly.`,
+If a tool returns an error or requires a connected account, explain this to the user clearly.
+
+When presenting tool results, include the token information so users can inspect the authentication flow.`,
     messages: prompt,
     tools,
     maxTokens: 2000,
