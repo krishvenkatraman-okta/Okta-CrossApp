@@ -47,8 +47,7 @@ export async function POST(request: NextRequest) {
       redirect_uri: redirectUri,
       state,
       code_challenge: codeChallenge,
-      code_challenge_method: codeChallengeMethod,
-      scopes: ['openid', 'profile']
+      code_challenge_method: codeChallengeMethod
     }
     
     console.log('[v0]   Request body:', JSON.stringify(requestBody, null, 2))
