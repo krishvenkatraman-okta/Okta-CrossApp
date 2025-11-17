@@ -34,9 +34,8 @@ export function LoginButton() {
 
       <Button onClick={handleWebLogin} size="lg" variant="outline" className="w-full gap-2 bg-transparent">
         <LogIn className="h-5 w-5" />
-        Sign In for Finance API Demo (Web Client)
+        Sign In for Okta Gateway
       </Button>
-      {/* </CHANGE> */}
     </div>
   )
 }

@@ -63,7 +63,7 @@ async function getAccessToken(): Promise<string> {
 /**
  * Exchanges Web Client ID token for Auth0 access token via ID-JAG
  */
-async function getAuth0AccessToken(): Promise<string> {
+export async function getAuth0AccessToken(): Promise<string> {
   const idToken = getWebClientIdToken()
   if (!idToken) {
     throw new Error("Not authenticated. Please log in with Finance API Demo flow first.")
@@ -97,7 +97,7 @@ async function getAuth0AccessToken(): Promise<string> {
 /**
  * Exchanges Web Client ID token for Auth0 access token via ID-JAG for Salesforce
  */
-async function getSalesforceAuth0AccessToken(): Promise<string> {
+export async function getSalesforceAuth0AccessToken(): Promise<string> {
   const idToken = getWebClientIdToken()
   if (!idToken) {
     throw new Error("Not authenticated. Please log in with Finance API Demo flow first.")
