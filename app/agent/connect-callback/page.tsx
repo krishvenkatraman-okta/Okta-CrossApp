@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, CheckCircle2, XCircle } from "@/components/icons"
 import { completeConnectedAccount } from "@/lib/gateway-client"
 
-export default function ConnectCallbackPage() {
+function ConnectCallbackContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading")
@@ -74,5 +74,17 @@ export default function ConnectCallbackPage() {
         )}
       </Card>
     </div>
+  )
+}
+
+export default function ConnectCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    }>
+      <ConnectCallbackContent />
+    </Suspense>
   )
 }
