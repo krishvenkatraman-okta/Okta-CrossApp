@@ -31,12 +31,14 @@ function createTools(req: Request) {
 
         const gatewayMode = process.env.GATEWAY_MODE === "true"
         const gatewayUrl = process.env.GATEWAY_URL
+        const salesforceDomain = process.env.SALESFORCE_DOMAIN
 
         console.log(`[v0] Step 4: Checking gateway configuration`)
         console.log(`[v0] - Gateway Mode: ${gatewayMode}`)
         console.log(`[v0] - Gateway URL: ${gatewayUrl || "NOT SET"}`)
+        console.log(`[v0] - Salesforce Domain: ${salesforceDomain || "NOT SET"}`)
 
-        if (gatewayMode && gatewayUrl) {
+        if (gatewayMode && gatewayUrl && salesforceDomain) {
           console.log(`[v0] Step 5: Preparing gateway request`)
           
           const endpointMap: Record<string, string> = {
@@ -45,18 +47,21 @@ function createTools(req: Request) {
             accounts: "/services/data/v57.0/query?q=SELECT+Id,Name,Industry+FROM+Account+LIMIT+10",
           }
 
-          const endpoint = endpointMap[dataType] || endpointMap.opportunities
-          const salesforceHost = process.env.SALESFORCE_RESOURCE?.replace("urn:", "").replace(":", ".") || "oktainc45-dev-ed.develop.my.salesforce.com"
+          const salesforceEndpoint = endpointMap[dataType] || endpointMap.opportunities
+          const fullGatewayUrl = `${gatewayUrl}${salesforceEndpoint}`
           
-          console.log(`[v0] - Endpoint: ${endpoint}`)
-          console.log(`[v0] - Salesforce Host: ${salesforceHost}`)
-          console.log(`[v0] - Full URL: ${gatewayUrl}${endpoint}`)
+          const gatewayHost = salesforceDomain.replace(/^https?:\/\//, '')
+          
+          console.log(`[v0] - Salesforce API endpoint: ${salesforceEndpoint}`)
+          console.log(`[v0] - Full gateway URL: ${fullGatewayUrl}`)
+          console.log(`[v0] - Salesforce Domain (raw): ${salesforceDomain}`)
+          console.log(`[v0] - X-GATEWAY-Host header (stripped): ${gatewayHost}`)
 
           console.log(`[v0] Step 6: Making gateway request`)
-          const response = await fetch(`${gatewayUrl}${endpoint}`, {
+          const response = await fetch(fullGatewayUrl, {
             headers: {
               Authorization: `Bearer ${accessToken}`,
-              "X-GATEWAY-Host": salesforceHost,
+              "X-GATEWAY-Host": gatewayHost,
             },
           })
 
@@ -95,12 +100,16 @@ function createTools(req: Request) {
             tokens: { idJag, accessToken },
           }
         } else {
-          console.log(`[v0] WARNING: Gateway mode disabled, returning mock data`)
-          console.log(`[v0] ===== SALESFORCE DATA REQUEST COMPLETED (MOCK) =====`)
+          console.log(`[v0] WARNING: Gateway mode disabled or missing configuration`)
+          console.log(`[v0] - GATEWAY_MODE: ${process.env.GATEWAY_MODE}`)
+          console.log(`[v0] - GATEWAY_URL: ${gatewayUrl ? "SET" : "NOT SET"}`)
+          console.log(`[v0] - SALESFORCE_DOMAIN: ${salesforceDomain ? "SET" : "NOT SET"}`)
+          console.log(`[v0] ===== SALESFORCE DATA REQUEST COMPLETED (NO GATEWAY) =====`)
+          
           return {
-            success: true,
+            success: false,
             dataType,
-            message: `Gateway mode is not enabled. Enable GATEWAY_MODE=true to use the gateway.`,
+            message: `Gateway mode is not fully configured. Please set GATEWAY_MODE=true, GATEWAY_URL, and SALESFORCE_DOMAIN environment variables.`,
             mockData: true,
             tokens: { idJag, accessToken },
           }
