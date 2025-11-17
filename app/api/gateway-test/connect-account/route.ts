@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const state = generateState()
     
     console.log('[v0]   PKCE parameters generated:')
+    console.log(`[v0]     Code Verifier: ${codeVerifier.substring(0, 30)}...`)
     console.log(`[v0]     Code Challenge Method: ${codeChallengeMethod}`)
     console.log(`[v0]     Code Challenge: ${codeChallenge.substring(0, 30)}...`)
     console.log(`[v0]     State: ${state}`)
@@ -41,22 +42,24 @@ export async function POST(request: NextRequest) {
     console.log(`[v0]   Connect URL: ${connectUrl}`)
     console.log(`[v0]   Redirect URI: ${redirectUri}`)
     
+    const requestBody = {
+      connection: 'Salesforce',
+      redirect_uri: redirectUri,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: codeChallengeMethod,
+      scopes: ['openid', 'profile']
+    }
+    
+    console.log('[v0]   Request body:', JSON.stringify(requestBody, null, 2))
+    
     const response = await fetch(connectUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${meAccessToken}`
       },
-      body: JSON.stringify({
-        connection: 'Salesforce',
-        redirect_uri: redirectUri,
-        state,
-        scopes: ['openid', 'profile'],
-        authorization: {
-          code_challenge: codeChallenge,
-          code_challenge_method: codeChallengeMethod
-        }
-      })
+      body: JSON.stringify(requestBody)
     })
     
     const responseText = await response.text()
@@ -74,10 +77,12 @@ export async function POST(request: NextRequest) {
     console.log('[v0] Connected account initiated successfully')
     console.log(`[v0]   Auth Session: ${data.auth_session}`)
     console.log(`[v0]   Connect URI: ${data.connect_uri}`)
+    console.log(`[v0]   Ticket: ${data.connect_params?.ticket}`)
     
     return NextResponse.json({
       ...data,
-      code_verifier: codeVerifier // Client needs this to complete PKCE flow
+      code_verifier: codeVerifier,
+      state: state
     })
   } catch (error) {
     console.error('[v0] Gateway Test: Connect account failed:', error)
