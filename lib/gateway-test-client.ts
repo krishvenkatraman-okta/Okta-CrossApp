@@ -10,6 +10,24 @@ export interface GatewayTestResult {
     meAuth0AccessToken?: string
   }
   logs: string[]
+  connectUri?: string
+  authSession?: string
+}
+
+export async function getConnectAccountUri(meAccessToken: string): Promise<string> {
+  const response = await fetch('/api/gateway-test/connect-account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ meAccessToken })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message)
+  }
+  
+  const data = await response.json()
+  return data.connect_uri
 }
 
 export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
@@ -117,7 +135,6 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
         }
         logs.push(`    Error Body: ${JSON.stringify(errorData, null, 2)}`)
         
-        // Check for federated connection error
         if (errorData.error === 'federated_connection_refresh_token_not_found') {
           logs.push('⚠ Federated connection not found - initiating connected account flow')
           logs.push('Step 5: Creating ME access token for connected accounts')
@@ -159,13 +176,41 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
           
           // Initiate connected account flow
           logs.push('Step 6: Initiating Salesforce connected account flow')
+          
+          const connectResponse = await fetch('/api/gateway-test/connect-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ meAccessToken: meAuth0Data.accessToken })
+          })
+          
+          if (!connectResponse.ok) {
+            const error = await connectResponse.json()
+            logs.push(`✗ Failed to initiate connected account: ${error.message}`)
+            throw new Error(error.message)
+          }
+          
+          const connectData = await connectResponse.json()
+          logs.push('✓ Connected account flow initiated')
+          logs.push(`  Auth Session: ${connectData.auth_session}`)
+          logs.push(`  Connect URI: ${connectData.connect_uri}`)
+          logs.push(`  Ticket: ${connectData.connect_params?.ticket}`)
+          
+          // Store auth_session and ME token for completion step
+          sessionStorage.setItem('pendingAuthSession', connectData.auth_session)
+          sessionStorage.setItem('pendingMEToken', meAuth0Data.accessToken)
+          
+          // Construct the full authorization URL
+          const authUrl = `${connectData.connect_uri}?ticket=${connectData.connect_params.ticket}`
+          logs.push(`  Authorization URL: ${authUrl}`)
           logs.push('  Please complete the connected account setup in the UI')
           
           return {
             success: false,
             error: 'federated_connection_refresh_token_not_found',
             tokens,
-            logs
+            logs,
+            connectUri: authUrl,
+            authSession: connectData.auth_session
           }
         }
         
@@ -203,4 +248,43 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
       logs
     }
   }
+}
+
+export async function completeConnectedAccount(authSession: string, connectCode: string, meAccessToken: string): Promise<void> {
+  const auth0Domain = process.env.NEXT_PUBLIC_AUTH0_DOMAIN
+  
+  if (!auth0Domain) {
+    throw new Error('AUTH0_DOMAIN environment variable not set')
+  }
+  
+  const completeUrl = `${auth0Domain}/me/v1/connected-accounts/complete`
+  const redirectUri = `${window.location.origin}/agent/connect-callback`
+  
+  console.log('[v0] Completing connected account')
+  console.log(`[v0]   URL: ${completeUrl}`)
+  console.log(`[v0]   Auth Session: ${authSession}`)
+  console.log(`[v0]   Connect Code: ${connectCode}`)
+  console.log(`[v0]   Redirect URI: ${redirectUri}`)
+  
+  const response = await fetch(completeUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${meAccessToken}`
+    },
+    body: JSON.stringify({
+      auth_session: authSession,
+      connect_code: connectCode,
+      redirect_uri: redirectUri
+    })
+  })
+  
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('[v0] Failed to complete connected account:', errorText)
+    throw new Error(`Failed to complete connected account: ${response.status} ${errorText}`)
+  }
+  
+  const data = await response.json()
+  console.log('[v0] Connected account completed successfully:', data)
 }

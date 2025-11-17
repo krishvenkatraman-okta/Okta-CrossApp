@@ -47,6 +47,9 @@ export function EnterpriseDashboard() {
 
   const [gatewayTestResult, setGatewayTestResult] = useState<GatewayTestResult | null>(null)
   const [isTestingGateway, setIsTestingGateway] = useState(false)
+  const [showConnectAccount, setShowConnectAccount] = useState(false)
+  const [connectAccountToken, setConnectAccountToken] = useState<string | null>(null)
+  const [isConnecting, setIsConnecting] = useState(false)
 
   useEffect(() => {
     setAuthMethod(getAuthMethod())
@@ -111,6 +114,8 @@ export function EnterpriseDashboard() {
   const testGatewayFlow = async () => {
     setIsTestingGateway(true)
     setGatewayTestResult(null)
+    setShowConnectAccount(false)
+    setConnectAccountToken(null)
     
     try {
       const result = await testSalesforceGatewayFlow()
@@ -131,10 +136,75 @@ export function EnterpriseDashboard() {
       if (result.tokens.meAuth0AccessToken) {
         tokenStore.setToken('me_auth0_access_token', result.tokens.meAuth0AccessToken)
       }
+      
+      if (result.error === 'federated_connection_refresh_token_not_found' && result.tokens.meAuth0AccessToken) {
+        setShowConnectAccount(true)
+        setConnectAccountToken(result.tokens.meAuth0AccessToken)
+      }
     } catch (error) {
       console.error('Gateway test failed:', error)
     } finally {
       setIsTestingGateway(false)
+    }
+  }
+
+  const handleConnectAccount = async () => {
+    if (!connectAccountToken) return
+    
+    setIsConnecting(true)
+    try {
+      const { getConnectAccountUri } = await import('@/lib/gateway-test-client')
+      const connectUri = await getConnectAccountUri(connectAccountToken)
+      
+      console.log('[v0] Opening connect window:', connectUri)
+      
+      const width = 600
+      const height = 700
+      const left = window.screenX + (window.outerWidth - width) / 2
+      const top = window.screenY + (window.outerHeight - height) / 2
+      
+      const popup = window.open(
+        connectUri,
+        'Connect Salesforce Account',
+        `width=${width},height=${height},left=${left},top=${top},popup=yes`
+      )
+      
+      if (!popup) {
+        throw new Error('Popup blocked. Please allow popups for this site.')
+      }
+      
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === 'connected_account_success') {
+          console.log('[v0] Connected account callback received')
+          window.removeEventListener('message', handleMessage)
+          popup?.close()
+          
+          setShowConnectAccount(false)
+          setGatewayTestResult(prev => prev ? {
+            ...prev,
+            logs: [...prev.logs, '', '✓ Salesforce account connected successfully!', '  You can now retry the gateway request']
+          } : null)
+        }
+      }
+      
+      window.addEventListener('message', handleMessage)
+      
+      const checkClosed = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(checkClosed)
+          window.removeEventListener('message', handleMessage)
+          setIsConnecting(false)
+        }
+      }, 500)
+      
+    } catch (error) {
+      console.error('[v0] Failed to connect account:', error)
+      setGatewayTestResult(prev => prev ? {
+        ...prev,
+        logs: [...prev.logs, `✗ Failed to open connect window: ${error instanceof Error ? error.message : String(error)}`]
+      } : null)
+    } finally {
+      setIsConnecting(false)
     }
   }
 
@@ -477,6 +547,27 @@ export function EnterpriseDashboard() {
                             <div key={i}>{log}</div>
                           ))}
                         </div>
+                        {showConnectAccount && (
+                          <div className="mt-4 pt-4 border-t">
+                            <Button 
+                              onClick={handleConnectAccount}
+                              disabled={isConnecting}
+                              className="gap-2"
+                            >
+                              {isConnecting ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Opening...
+                                </>
+                              ) : (
+                                'Connect Salesforce Account'
+                              )}
+                            </Button>
+                            <p className="text-xs mt-2 text-muted-foreground">
+                              Click to authorize Salesforce access in a popup window
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </AlertDescription>
                   </Alert>

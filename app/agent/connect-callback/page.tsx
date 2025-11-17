@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, CheckCircle2, XCircle } from "@/components/icons"
-import { completeConnectedAccount } from "@/lib/gateway-client"
 
 function ConnectCallbackContent() {
   const searchParams = useSearchParams()
@@ -14,37 +13,71 @@ function ConnectCallbackContent() {
   const [error, setError] = useState<string>("")
 
   useEffect(() => {
-    const completeConnection = async () => {
+    const handleCallback = async () => {
       const connectCode = searchParams.get("connect_code")
-      const authSession = sessionStorage.getItem("pendingAuthSession")
+      const errorParam = searchParams.get("error")
 
-      if (!connectCode || !authSession) {
+      if (errorParam) {
         setStatus("error")
-        setError("Missing connection parameters")
+        setError(`Authentication failed: ${errorParam}`)
         return
       }
 
-      try {
-        await completeConnectedAccount(
-          authSession,
-          connectCode,
-          `${window.location.origin}/agent/connect-callback`
-        )
+      if (connectCode) {
+        console.log('[v0] Received connect_code, completing connection')
+        
+        // If opened as popup, notify parent and close
+        if (window.opener) {
+          console.log('[v0] Popup mode - notifying parent window')
+          window.opener.postMessage({
+            type: 'connected_account_complete',
+            connectCode
+          }, window.location.origin)
+          
+          setStatus("success")
+          setError("Account connected successfully! You can close this window.")
+          
+          // Auto-close popup after 2 seconds
+          setTimeout(() => {
+            window.close()
+          }, 2000)
+          return
+        }
 
-        sessionStorage.removeItem("pendingAuthSession")
-        setStatus("success")
+        // If not a popup, complete the connection directly
+        const authSession = sessionStorage.getItem("pendingAuthSession")
+        const meToken = sessionStorage.getItem("pendingMEToken")
 
-        // Redirect back to agent after 2 seconds
-        setTimeout(() => {
-          router.push("/agent")
-        }, 2000)
-      } catch (err: any) {
+        if (!authSession || !meToken) {
+          setStatus("error")
+          setError("Missing auth session or ME token")
+          return
+        }
+
+        try {
+          const { completeConnectedAccount } = await import("@/lib/gateway-test-client")
+          await completeConnectedAccount(authSession, connectCode, meToken)
+
+          sessionStorage.removeItem("pendingAuthSession")
+          sessionStorage.removeItem("pendingMEToken")
+          setStatus("success")
+
+          // Redirect back to main page after 2 seconds
+          setTimeout(() => {
+            router.push("/")
+          }, 2000)
+        } catch (err: any) {
+          console.error('[v0] Failed to complete connection:', err)
+          setStatus("error")
+          setError(err.message || "Failed to complete connection")
+        }
+      } else {
         setStatus("error")
-        setError(err.message || "Failed to complete connection")
+        setError("Missing connect_code parameter")
       }
     }
 
-    completeConnection()
+    handleCallback()
   }, [searchParams, router])
 
   return (
@@ -61,14 +94,14 @@ function ConnectCallbackContent() {
           </CardTitle>
           <CardDescription>
             {status === "loading" && "Please wait while we complete the connection"}
-            {status === "success" && "Redirecting you back to the agent..."}
+            {status === "success" && "Redirecting you back to the main page..."}
             {status === "error" && error}
           </CardDescription>
         </CardHeader>
         {status === "error" && (
           <CardContent>
-            <Button onClick={() => router.push("/agent")} className="w-full">
-              Return to Agent
+            <Button onClick={() => router.push("/")} className="w-full">
+              Return to Main Page
             </Button>
           </CardContent>
         )}
