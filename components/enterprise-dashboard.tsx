@@ -149,14 +149,14 @@ export function EnterpriseDashboard() {
   }
 
   const handleConnectAccount = async () => {
-    if (!connectAccountToken) return
+    if (!gatewayTestResult?.connectUri) {
+      console.error('[v0] No connect URI available')
+      return
+    }
     
     setIsConnecting(true)
     try {
-      const { getConnectAccountUri } = await import('@/lib/gateway-test-client')
-      const connectUri = await getConnectAccountUri(connectAccountToken)
-      
-      console.log('[v0] Opening connect window:', connectUri)
+      console.log('[v0] Opening connect window:', gatewayTestResult.connectUri)
       
       const width = 600
       const height = 700
@@ -164,7 +164,7 @@ export function EnterpriseDashboard() {
       const top = window.screenY + (window.outerHeight - height) / 2
       
       const popup = window.open(
-        connectUri,
+        gatewayTestResult.connectUri,
         'Connect Salesforce Account',
         `width=${width},height=${height},left=${left},top=${top},popup=yes`
       )
@@ -203,7 +203,6 @@ export function EnterpriseDashboard() {
         ...prev,
         logs: [...prev.logs, `✗ Failed to open connect window: ${error instanceof Error ? error.message : String(error)}`]
       } : null)
-    } finally {
       setIsConnecting(false)
     }
   }

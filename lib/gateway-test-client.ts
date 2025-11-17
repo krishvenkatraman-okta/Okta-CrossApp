@@ -15,19 +15,30 @@ export interface GatewayTestResult {
 }
 
 export async function getConnectAccountUri(meAccessToken: string): Promise<string> {
-  const response = await fetch('/api/gateway-test/connect-account', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ meAccessToken })
-  })
-  
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message)
+  if ((window as any).__connectAccountRequestInProgress) {
+    console.log('[v0] Connect account request already in progress, skipping duplicate')
+    throw new Error('Request already in progress')
   }
   
-  const data = await response.json()
-  return data.connect_uri
+  (window as any).__connectAccountRequestInProgress = true
+  
+  try {
+    const response = await fetch('/api/gateway-test/connect-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ meAccessToken })
+    })
+    
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.message)
+    }
+    
+    const data = await response.json()
+    return data.connect_uri
+  } finally {
+    (window as any).__connectAccountRequestInProgress = false
+  }
 }
 
 export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
