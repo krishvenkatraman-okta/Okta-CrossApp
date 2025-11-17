@@ -69,6 +69,7 @@ function ConnectCallbackContent() {
           sessionStorage.removeItem("pendingMEToken")
           sessionStorage.removeItem("pendingCodeVerifier")
           setStatus("success")
+          setError("Account connected successfully! Redirecting...")
 
           // Redirect back to main page after 2 seconds
           setTimeout(() => {

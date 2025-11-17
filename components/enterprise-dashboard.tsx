@@ -174,15 +174,23 @@ export function EnterpriseDashboard() {
       }
       
       const handleMessage = (event: MessageEvent) => {
-        if (event.data.type === 'connected_account_success') {
-          console.log('[v0] Connected account callback received')
+        if (event.data.type === 'connected_account_complete') {
+          console.log('[v0] Connected account callback received, connect_code:', event.data.connectCode)
           window.removeEventListener('message', handleMessage)
           popup?.close()
           
           setShowConnectAccount(false)
+          setIsConnecting(false)
           setGatewayTestResult(prev => prev ? {
             ...prev,
-            logs: [...prev.logs, '', '✓ Salesforce account connected successfully!', '  You can now retry the gateway request']
+            success: true,
+            logs: [
+              ...prev.logs, 
+              '', 
+              '✓ Salesforce account connected successfully!', 
+              '  Connection completed with connect_code: ' + event.data.connectCode,
+              '  You can now retry the gateway request - the federated connection should work'
+            ]
           } : null)
         }
       }
