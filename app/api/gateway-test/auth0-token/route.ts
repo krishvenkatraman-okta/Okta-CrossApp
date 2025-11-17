@@ -14,7 +14,26 @@ export async function POST(request: NextRequest) {
     
     console.log(`[v0] Gateway Test: Exchanging ID-JAG for Auth0 token (${resourceType || 'default'})`)
     
-    const accessToken = await exchangeIdJagForAuth0Token(idJagToken, resourceType)
+    const tokenEndpoint = process.env.AUTH0_TOKEN_ENDPOINT!
+    const clientId = process.env.AUTH0_REQUESTING_APP_CLIENT_ID!
+    const clientSecret = process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!
+    
+    // Use appropriate scope based on resource type
+    const scope = resourceType === 'salesforce' ? 'salesforce:read' : 'finance:read'
+    
+    console.log('[v0] Gateway Test: Token exchange parameters:', {
+      tokenEndpoint,
+      scope,
+      clientId: clientId.substring(0, 10) + '...'
+    })
+    
+    const accessToken = await exchangeIdJagForAuth0Token(
+      idJagToken,
+      tokenEndpoint,
+      clientId,
+      clientSecret,
+      scope
+    )
     
     console.log('[v0] Gateway Test: Auth0 Access Token received')
     
