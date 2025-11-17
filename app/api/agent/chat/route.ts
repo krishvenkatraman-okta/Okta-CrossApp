@@ -60,13 +60,13 @@ function createTools(req: Request) {
           console.log(`[v0] - Salesforce API endpoint: ${salesforceEndpoint}`)
           console.log(`[v0] - Full gateway URL: ${fullGatewayUrl}`)
           console.log(`[v0] - Salesforce Domain (raw): ${salesforceDomain}`)
-          console.log(`[v0] - X-GATEWAY-Host header (stripped): ${gatewayHost}`)
+          console.log(`[v0] - x-gateway-host header (stripped): ${gatewayHost}`)
 
           console.log(`[v0] Step 6: Making gateway request`)
           const response = await fetch(fullGatewayUrl, {
             headers: {
               Authorization: `Bearer ${accessToken}`,
-              "X-GATEWAY-Host": gatewayHost,
+              "x-gateway-host": gatewayHost,
             },
           })
 

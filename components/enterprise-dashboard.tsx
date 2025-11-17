@@ -116,7 +116,6 @@ export function EnterpriseDashboard() {
       const result = await testSalesforceGatewayFlow()
       setGatewayTestResult(result)
       
-      // Store all tokens in the token panel
       if (result.tokens.idToken) {
         tokenStore.setToken('web_id_token', result.tokens.idToken)
       }

@@ -21,12 +21,16 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
     
     // Step 1: Get Web ID Token from session
     logs.push('Step 1: Retrieving Web ID Token from session')
-    const idToken = sessionStorage.getItem('web_id_token')
+    const idToken = sessionStorage.getItem('web_okta_id_token') // Use correct key
     if (!idToken) {
+      logs.push('  Checked sessionStorage keys:')
+      logs.push(`    - web_okta_id_token: ${sessionStorage.getItem('web_okta_id_token') ? 'found' : 'not found'}`)
+      logs.push(`    - web_id_token: ${sessionStorage.getItem('web_id_token') ? 'found' : 'not found'}`)
       throw new Error('Not authenticated. Please log in with Okta Gateway first.')
     }
     tokens.idToken = idToken
     logs.push('✓ Web ID Token retrieved')
+    logs.push(`  Token preview: ${idToken.substring(0, 50)}...`)
     
     // Step 2: Exchange for Salesforce ID-JAG
     logs.push('Step 2: Exchanging Web ID Token for Salesforce ID-JAG')
@@ -80,10 +84,14 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
     
     if (gatewayMode && gatewayUrl) {
       const fullUrl = `${gatewayUrl}/opportunities`
-      logs.push(`  Request: GET ${fullUrl}`)
-      logs.push(`  Headers:`)
-      logs.push(`    Authorization: Bearer ${auth0Data.accessToken.substring(0, 30)}...`)
-      logs.push(`    X-GATEWAY-Host: ${hostname}`)
+      logs.push(`  Gateway URL: ${fullUrl}`)
+      logs.push(`  Request Details:`)
+      logs.push(`    Method: GET`)
+      logs.push(`    Full URL: ${fullUrl}`)
+      logs.push(`    Headers:`)
+      logs.push(`      Authorization: Bearer ${auth0Data.accessToken.substring(0, 30)}...`)
+      logs.push(`      X-GATEWAY-Host: ${hostname}`)
+      logs.push(`    Expected Salesforce endpoint: https://${hostname}/opportunities`)
       
       const gatewayResponse = await fetch('/api/gateway-test/salesforce-data', {
         method: 'POST',
@@ -95,11 +103,19 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
         })
       })
       
-      logs.push(`  Response: ${gatewayResponse.status} ${gatewayResponse.statusText}`)
+      logs.push(`  Gateway Response:`)
+      logs.push(`    Status: ${gatewayResponse.status} ${gatewayResponse.statusText}`)
+      logs.push(`    Headers: ${JSON.stringify(Object.fromEntries(gatewayResponse.headers.entries()), null, 2)}`)
       
       if (!gatewayResponse.ok) {
-        const errorData = await gatewayResponse.json()
-        logs.push(`  Error Body: ${JSON.stringify(errorData, null, 2)}`)
+        const errorText = await gatewayResponse.text()
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { message: errorText }
+        }
+        logs.push(`    Error Body: ${JSON.stringify(errorData, null, 2)}`)
         
         // Check for federated connection error
         if (errorData.error === 'federated_connection_refresh_token_not_found') {
@@ -158,7 +174,7 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
       
       const data = await gatewayResponse.json()
       logs.push(`✓ Gateway API call successful`)
-      logs.push(`  Response: ${JSON.stringify(data, null, 2)}`)
+      logs.push(`  Response Data: ${JSON.stringify(data, null, 2)}`)
       
       logs.push('=== Gateway Test Flow Completed Successfully ===')
       
@@ -169,7 +185,10 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
         logs
       }
     } else {
-      logs.push('✗ Gateway mode is not enabled or GATEWAY_URL not configured')
+      logs.push(`✗ Gateway configuration:`)
+      logs.push(`    GATEWAY_MODE: ${process.env.NEXT_PUBLIC_GATEWAY_MODE}`)
+      logs.push(`    GATEWAY_URL: ${gatewayUrl || 'not set'}`)
+      logs.push(`    SALESFORCE_DOMAIN: ${salesforceDomain || 'not set'}`)
       throw new Error('Gateway mode is not enabled. Please set GATEWAY_MODE=true and GATEWAY_URL')
     }
     
