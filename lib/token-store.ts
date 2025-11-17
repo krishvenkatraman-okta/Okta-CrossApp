@@ -8,6 +8,8 @@ type TokenType =
   | "auth0_access_token" 
   | "web_id_token" 
   | "web_access_token"
+  | "finance_id_jag_token"
+  | "finance_auth0_access_token"
   | "salesforce_id_jag_token"
   | "salesforce_auth0_access_token"
   | "me_id_jag_token"
@@ -44,6 +46,8 @@ class TokenStore {
     meIdJag?: string
     meAccessToken?: string
     salesforceAccessToken?: string
+    financeIdJag?: string
+    financeAccessToken?: string
   }) {
     if (data.idJag) {
       this.setToken("salesforce_id_jag_token", data.idJag)
@@ -59,6 +63,12 @@ class TokenStore {
     }
     if (data.salesforceAccessToken) {
       this.setToken("salesforce_final_access_token" as TokenType, data.salesforceAccessToken)
+    }
+    if (data.financeIdJag) {
+      this.setToken("finance_id_jag_token" as TokenType, data.financeIdJag)
+    }
+    if (data.financeAccessToken) {
+      this.setToken("finance_auth0_access_token" as TokenType, data.financeAccessToken)
     }
   }
 

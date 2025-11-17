@@ -29,6 +29,11 @@ function createTools(req: Request) {
         console.log(`[v0] - ID-JAG length: ${idJag.length}`)
         console.log(`[v0] - Access Token length: ${accessToken.length}`)
 
+        const tokenData = {
+          salesforce_id_jag_token: idJag,
+          salesforce_auth0_access_token: accessToken,
+        }
+
         const gatewayMode = process.env.GATEWAY_MODE === "true"
         const gatewayUrl = process.env.GATEWAY_URL
         const salesforceDomain = process.env.SALESFORCE_DOMAIN
@@ -80,7 +85,7 @@ function createTools(req: Request) {
                 requiresConnection: true,
                 message: "Connected account required. Please connect your Salesforce account.",
                 error: errorData.error,
-                tokens: { idJag, accessToken },
+                tokens: tokenData,
               }
             }
 
@@ -97,7 +102,7 @@ function createTools(req: Request) {
             dataType,
             data,
             message: `Successfully retrieved ${dataType} from Salesforce`,
-            tokens: { idJag, accessToken },
+            tokens: tokenData,
           }
         } else {
           console.log(`[v0] WARNING: Gateway mode disabled or missing configuration`)
@@ -111,7 +116,7 @@ function createTools(req: Request) {
             dataType,
             message: `Gateway mode is not fully configured. Please set GATEWAY_MODE=true, GATEWAY_URL, and SALESFORCE_DOMAIN environment variables.`,
             mockData: true,
-            tokens: { idJag, accessToken },
+            tokens: tokenData,
           }
         }
       } catch (error) {
@@ -154,6 +159,11 @@ function createTools(req: Request) {
         console.log(`[v0] - ID-JAG length: ${idJag.length}`)
         console.log(`[v0] - Access Token length: ${accessToken.length}`)
 
+        const tokenData = {
+          finance_id_jag_token: idJag,
+          finance_auth0_access_token: accessToken,
+        }
+
         const apiUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/resource/financial`
         console.log(`[v0] Step 4: Making financial API request`)
         console.log(`[v0] - API URL: ${apiUrl}`)
@@ -180,7 +190,7 @@ function createTools(req: Request) {
           dataType,
           data,
           message: `Successfully retrieved ${dataType} financial data`,
-          tokens: { idJag, accessToken },
+          tokens: tokenData,
         }
       } catch (error) {
         console.error(`[v0] ===== FINANCIAL DATA REQUEST FAILED =====`)

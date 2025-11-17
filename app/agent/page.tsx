@@ -65,14 +65,16 @@ export default function AgentPage() {
         message.parts.forEach((part) => {
           if (part.type === "tool-result" && part.result) {
             const result = part.result as any
+            console.log("[v0] Tool result received:", part.toolName, result)
+            
+            // Store tokens from tool execution with proper names
             if (result.tokens) {
-              // Store tokens from tool execution
-              if (result.tokens.idJag) {
-                tokenStore.setToken("salesforce_id_jag_token", result.tokens.idJag)
-              }
-              if (result.tokens.accessToken) {
-                tokenStore.setToken("salesforce_auth0_access_token", result.tokens.accessToken)
-              }
+              Object.entries(result.tokens).forEach(([key, value]) => {
+                if (typeof value === "string") {
+                  console.log(`[v0] Storing token: ${key}`)
+                  tokenStore.setToken(key as any, value)
+                }
+              })
             }
           }
         })
