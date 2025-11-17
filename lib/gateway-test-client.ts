@@ -195,9 +195,9 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
           logs.push(`  Connect URI: ${connectData.connect_uri}`)
           logs.push(`  Ticket: ${connectData.connect_params?.ticket}`)
           
-          // Store auth_session and ME token for completion step
           sessionStorage.setItem('pendingAuthSession', connectData.auth_session)
           sessionStorage.setItem('pendingMEToken', meAuth0Data.accessToken)
+          sessionStorage.setItem('pendingCodeVerifier', connectData.code_verifier)
           
           // Construct the full authorization URL
           const authUrl = `${connectData.connect_uri}?ticket=${connectData.connect_params.ticket}`
@@ -250,7 +250,7 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
   }
 }
 
-export async function completeConnectedAccount(authSession: string, connectCode: string, meAccessToken: string): Promise<void> {
+export async function completeConnectedAccount(authSession: string, connectCode: string, meAccessToken: string, codeVerifier: string): Promise<void> {
   const auth0Domain = process.env.NEXT_PUBLIC_AUTH0_DOMAIN
   
   if (!auth0Domain) {
@@ -265,6 +265,7 @@ export async function completeConnectedAccount(authSession: string, connectCode:
   console.log(`[v0]   Auth Session: ${authSession}`)
   console.log(`[v0]   Connect Code: ${connectCode}`)
   console.log(`[v0]   Redirect URI: ${redirectUri}`)
+  console.log(`[v0]   Code Verifier: ${codeVerifier.substring(0, 30)}...`)
   
   const response = await fetch(completeUrl, {
     method: 'POST',
@@ -275,7 +276,8 @@ export async function completeConnectedAccount(authSession: string, connectCode:
     body: JSON.stringify({
       auth_session: authSession,
       connect_code: connectCode,
-      redirect_uri: redirectUri
+      redirect_uri: redirectUri,
+      code_verifier: codeVerifier // Include PKCE code_verifier
     })
   })
   

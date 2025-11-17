@@ -47,6 +47,7 @@ function ConnectCallbackContent() {
         // If not a popup, complete the connection directly
         const authSession = sessionStorage.getItem("pendingAuthSession")
         const meToken = sessionStorage.getItem("pendingMEToken")
+        const codeVerifier = sessionStorage.getItem("pendingCodeVerifier")
 
         if (!authSession || !meToken) {
           setStatus("error")
@@ -54,12 +55,19 @@ function ConnectCallbackContent() {
           return
         }
 
+        if (!codeVerifier) {
+          setStatus("error")
+          setError("Missing code verifier for PKCE flow")
+          return
+        }
+
         try {
           const { completeConnectedAccount } = await import("@/lib/gateway-test-client")
-          await completeConnectedAccount(authSession, connectCode, meToken)
+          await completeConnectedAccount(authSession, connectCode, meToken, codeVerifier)
 
           sessionStorage.removeItem("pendingAuthSession")
           sessionStorage.removeItem("pendingMEToken")
+          sessionStorage.removeItem("pendingCodeVerifier")
           setStatus("success")
 
           // Redirect back to main page after 2 seconds

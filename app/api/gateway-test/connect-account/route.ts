@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { generateCodeVerifier, generateCodeChallenge, generateState } from '@/lib/pkce'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +23,16 @@ export async function POST(request: NextRequest) {
       )
     }
     
+    const codeVerifier = generateCodeVerifier()
+    const codeChallenge = await generateCodeChallenge(codeVerifier)
+    const codeChallengeMethod = 'S256'
+    const state = generateState()
+    
+    console.log('[v0]   PKCE parameters generated:')
+    console.log(`[v0]     Code Challenge Method: ${codeChallengeMethod}`)
+    console.log(`[v0]     Code Challenge: ${codeChallenge.substring(0, 30)}...`)
+    console.log(`[v0]     State: ${state}`)
+    
     const origin = request.headers.get('origin') || request.headers.get('host') || 'http://localhost:3000'
     const redirectUri = `${origin}/agent/connect-callback`
     
@@ -39,8 +50,12 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         connection: 'Salesforce',
         redirect_uri: redirectUri,
-        state: crypto.randomUUID(),
-        scopes: ['openid', 'profile'] // Already correct - array format required by Auth0
+        state,
+        scopes: ['openid', 'profile'],
+        authorization: {
+          code_challenge: codeChallenge,
+          code_challenge_method: codeChallengeMethod
+        }
       })
     })
     
@@ -60,7 +75,10 @@ export async function POST(request: NextRequest) {
     console.log(`[v0]   Auth Session: ${data.auth_session}`)
     console.log(`[v0]   Connect URI: ${data.connect_uri}`)
     
-    return NextResponse.json(data)
+    return NextResponse.json({
+      ...data,
+      code_verifier: codeVerifier // Client needs this to complete PKCE flow
+    })
   } catch (error) {
     console.error('[v0] Gateway Test: Connect account failed:', error)
     return NextResponse.json(
