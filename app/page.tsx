@@ -8,7 +8,7 @@ import { EnterpriseDashboard } from "@/components/enterprise-dashboard"
 import { TokenPanel } from "@/components/token-panel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Shield, LogOut, CheckCircle2, BookOpen, Database, BarChart3 } from "@/components/icons"
+import { Shield, LogOut, CheckCircle2, BookOpen, Database, BarChart3, Bot } from "@/components/icons"
 import Link from "next/link"
 
 export default function Home() {
@@ -130,6 +130,14 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {webAuthenticated && (
+              <Link href="/agent">
+                <Button variant="default" size="sm" className="gap-2">
+                  <Bot className="h-4 w-4" />
+                  AI Agent
+                </Button>
+              </Link>
+            )}
             <Link href="/api-docs">
               <Button variant="ghost" size="sm">
                 <BookOpen className="h-4 w-4 mr-2" />
