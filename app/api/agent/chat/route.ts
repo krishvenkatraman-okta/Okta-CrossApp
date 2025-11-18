@@ -5,6 +5,197 @@ import { exchangeForAuth0Token, exchangeForSalesforceAuth0Token, getIdTokenFromC
 export const maxDuration = 30
 
 function createTools(req: Request) {
+  const discoverSalesforceSchema = tool({
+    description: "Discover available Salesforce objects, fields, and APIs dynamically. Call this first to understand what data is available.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      console.log(`[v0] ===== SALESFORCE SCHEMA DISCOVERY STARTED =====`)
+      
+      try {
+        const idToken = getIdTokenFromCookies(req)
+        if (!idToken) {
+          throw new Error("Not authenticated. Please log in with Okta Gateway first.")
+        }
+
+        const { idJag, accessToken } = await exchangeForSalesforceAuth0Token(idToken)
+        const salesforceDomain = process.env.SALESFORCE_DOMAIN
+        
+        if (!salesforceDomain) {
+          throw new Error("SALESFORCE_DOMAIN not configured")
+        }
+
+        // Import dynamically to avoid circular dependencies
+        const { discoverSalesforceSchema, generateSalesforceToolDescription } = await import('@/lib/salesforce-schema-discovery')
+        
+        const schema = await discoverSalesforceSchema(salesforceDomain, accessToken)
+        const description = generateSalesforceToolDescription(schema)
+        
+        console.log(`[v0] ===== SALESFORCE SCHEMA DISCOVERY COMPLETED =====`)
+        
+        return {
+          success: true,
+          schema,
+          description,
+          message: "Successfully discovered Salesforce schema. Use querySalesforceData to query specific objects."
+        }
+      } catch (error) {
+        console.error(`[v0] Error discovering schema:`, error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error"
+        }
+      }
+    }
+  })
+
+  const querySalesforceData = tool({
+    description: "Query Salesforce data using SOQL. You can query any object discovered via discoverSalesforceSchema. The tool handles gateway routing automatically.",
+    inputSchema: z.object({
+      objectName: z.string().describe("Salesforce object name (e.g., 'Opportunity', 'Account', 'Lead')"),
+      fields: z.array(z.string()).describe("Fields to retrieve (e.g., ['Id', 'Name', 'Amount'])"),
+      whereClause: z.string().optional().describe("Optional WHERE clause (e.g., 'StageName = Closed Won')"),
+      limit: z.number().default(10).describe("Maximum number of records to return")
+    }),
+    execute: async ({ objectName, fields, whereClause, limit }) => {
+      console.log(`[v0] ===== SALESFORCE QUERY STARTED =====`)
+      console.log(`[v0] Query: ${objectName}, Fields: ${fields.join(', ')}`)
+      
+      try {
+        const idToken = getIdTokenFromCookies(req)
+        if (!idToken) {
+          throw new Error("Not authenticated")
+        }
+
+        const { idJag, accessToken } = await exchangeForSalesforceAuth0Token(idToken)
+        
+        // Build SOQL query
+        const soql = `SELECT ${fields.join(', ')} FROM ${objectName}${whereClause ? ` WHERE ${whereClause}` : ''} LIMIT ${limit}`
+        console.log(`[v0] SOQL: ${soql}`)
+        
+        const tokenData = {
+          salesforce_id_jag_token: idJag,
+          salesforce_auth0_access_token: accessToken
+        }
+
+        const gatewayMode = process.env.GATEWAY_MODE === "true"
+        const gatewayUrl = process.env.GATEWAY_URL
+        const salesforceDomain = process.env.SALESFORCE_DOMAIN
+
+        if (gatewayMode && gatewayUrl && salesforceDomain) {
+          // Use gateway
+          const encodedQuery = encodeURIComponent(soql)
+          const endpoint = `/services/data/v62.0/query?q=${encodedQuery}`
+          const fullUrl = `${gatewayUrl}${endpoint}`
+          const gatewayHost = salesforceDomain.replace(/^https?:\/\//, '')
+          
+          console.log(`[v0] Making gateway request to: ${fullUrl}`)
+          
+          const response = await fetch(fullUrl, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+              "x-gateway-host": gatewayHost
+            }
+          })
+
+          console.log(`[v0] Gateway response status: ${response.status}`)
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            console.log(`[v0] Error response:`, errorData)
+
+            if (errorData.error === "federated_connection_refresh_token_not_found") {
+              console.log(`[v0] Connected account required`)
+              return {
+                success: false,
+                requiresConnection: true,
+                message: "Connected account required. Please connect your Salesforce account first.",
+                error: errorData.error,
+                tokens: tokenData
+              }
+            }
+
+            throw new Error(`Gateway request failed: ${response.status}`)
+          }
+
+          const data = await response.json()
+          console.log(`[v0] Query successful, records: ${data.records?.length || 0}`)
+          
+          return {
+            success: true,
+            data,
+            query: soql,
+            message: `Successfully retrieved ${data.records?.length || 0} ${objectName} records`,
+            tokens: tokenData
+          }
+        } else {
+          // Direct API call (fallback)
+          const { createSalesforceConnection } = await import('@/lib/salesforce-client')
+          const conn = createSalesforceConnection(salesforceDomain!, accessToken)
+          const result = await conn.query(soql)
+          
+          return {
+            success: true,
+            data: result,
+            query: soql,
+            message: `Successfully retrieved ${result.records?.length || 0} ${objectName} records`,
+            tokens: tokenData
+          }
+        }
+      } catch (error) {
+        console.error(`[v0] Query error:`, error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error"
+        }
+      }
+    }
+  })
+
+  const connectSalesforceAccount = tool({
+    description: "Initiate the connected account flow for Salesforce when federated_connection_refresh_token_not_found error occurs",
+    inputSchema: z.object({
+      meAccessToken: z.string().describe("The ME Auth0 access token from previous tool result")
+    }),
+    execute: async ({ meAccessToken }) => {
+      console.log(`[v0] ===== CONNECTED ACCOUNT FLOW STARTED =====`)
+      
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
+        const response = await fetch(`${baseUrl}/api/gateway-test/connect-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meAccessToken })
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to create connect account ticket: ${response.status}`)
+        }
+
+        const data = await response.json()
+        console.log(`[v0] Connect account ticket created`)
+        
+        return {
+          success: true,
+          connectUri: data.connectUri,
+          authorizationUrl: data.authorizationUrl,
+          ticket: data.ticket,
+          authSession: data.authSession,
+          sessionId: data.sessionId,
+          message: "Connected account flow initiated. User needs to authorize in popup window.",
+          instructions: "Open the authorizationUrl in a popup to let the user connect their Salesforce account."
+        }
+      } catch (error) {
+        console.error(`[v0] Connect account error:`, error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error"
+        }
+      }
+    }
+  })
+
   const getSalesforceDataTool = tool({
     description: "Get Salesforce data such as opportunities, leads, or accounts through the gateway",
     inputSchema: z.object({
@@ -77,7 +268,6 @@ function createTools(req: Request) {
             const errorData = await response.json().catch(() => ({}))
             console.log(`[v0] ERROR: Gateway error response:`, errorData)
 
-            // Check for connected account error
             if (errorData.error === "federated_connection_refresh_token_not_found") {
               console.log(`[v0] SPECIAL CASE: Connected account required for Salesforce`)
               return {
@@ -209,8 +399,11 @@ function createTools(req: Request) {
   })
 
   return {
+    discoverSalesforceSchema,
+    querySalesforceData,
+    connectSalesforceAccount,
     getSalesforceData: getSalesforceDataTool,
-    getFinancialData: getFinancialDataTool,
+    getFinancialData: getFinancialDataTool
   }
 }
 
@@ -219,11 +412,10 @@ export async function POST(req: Request) {
   
   const { messages }: { messages: UIMessage[] } = await req.json()
   console.log(`[v0] Message count: ${messages.length}`)
-  console.log(`[v0] Last message: ${messages[messages.length - 1]?.content || "N/A"}`)
 
   const prompt = convertToModelMessages(messages)
-
   const tools = createTools(req)
+
   console.log(`[v0] Tools created and ready`)
 
   console.log(`[v0] Calling Claude Haiku 4.5 model...`)
@@ -231,16 +423,17 @@ export async function POST(req: Request) {
     model: "anthropic/claude-haiku-4.5",
     system: `You are an AI agent that helps users access enterprise data through Okta cross-app access and Auth0 gateway.
     
-When a user asks for Salesforce data, use the getSalesforceData tool.
-When a user asks for financial data, use the getFinancialData tool.
+When a user asks for Salesforce data, use the discoverSalesforceSchema tool first to understand available objects and fields.
+Then use the querySalesforceData tool with the appropriate object name and fields.
+If a tool returns an error or requires a connected account, explain this to the user clearly and use the connectSalesforceAccount tool if necessary.
+
+For financial data, use the getFinancialData tool.
 
 Always explain what you're doing and present the results in a clear, user-friendly format.
-If a tool returns an error or requires a connected account, explain this to the user clearly.
-
-When presenting tool results, include the token information so users can inspect the authentication flow.`,
+Store the tokens from tool results for debugging.`,
     messages: prompt,
     tools,
-    maxTokens: 2000,
+    maxTokens: 4000
   })
 
   console.log(`[v0] Streaming response to client`)

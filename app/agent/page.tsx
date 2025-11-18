@@ -76,6 +76,29 @@ export default function AgentPage() {
                 }
               })
             }
+            
+            if (result.requiresConnection && result.connectUri) {
+              console.log('[v0] Agent detected connection required')
+              setPendingConnection({
+                connectUri: result.connectUri,
+                ticket: result.ticket,
+                authSession: result.authSession
+              })
+            }
+            
+            if (result.authorizationUrl && result.sessionId) {
+              console.log('[v0] Agent initiated connected account flow')
+              
+              // Store session data
+              sessionStorage.setItem(`ca_session_${result.sessionId}`, JSON.stringify({
+                auth_session: result.authSession,
+                me_token: result.meAccessToken,
+                code_verifier: result.codeVerifier
+              }))
+              
+              // Open popup
+              window.open(result.authorizationUrl, "_blank", "width=600,height=700")
+            }
           }
         })
       }
