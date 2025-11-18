@@ -140,6 +140,16 @@ export function EnterpriseDashboard() {
       if (result.error === 'federated_connection_refresh_token_not_found' && result.tokens.meAuth0AccessToken) {
         setShowConnectAccount(true)
         setConnectAccountToken(result.tokens.meAuth0AccessToken)
+        
+        if (result.connectUri && result.authSession && result.sessionId) {
+          const sessionKey = `ca_session_${result.sessionId}`
+          sessionStorage.setItem(sessionKey, JSON.stringify({
+            authSession: result.authSession,
+            meToken: result.tokens.meAuth0AccessToken,
+            codeVerifier: result.codeVerifier
+          }))
+          console.log('[v0] Stored session data for:', result.sessionId)
+        }
       }
     } catch (error) {
       console.error('Gateway test failed:', error)
@@ -154,41 +164,35 @@ export function EnterpriseDashboard() {
       return
     }
     
-    if (!gatewayTestResult?.connectUri || !gatewayTestResult?.authSession || !gatewayTestResult?.sessionId) {
-      console.log('[v0] Missing connect data, will fetch now')
-      // Let the button proceed with the flow - it will fetch the data
+    const connectUri = gatewayTestResult?.connectUri
+    const authSession = gatewayTestResult?.authSession
+    const sessionId = gatewayTestResult?.sessionId
+    const codeVerifier = gatewayTestResult?.codeVerifier
+    
+    if (!connectUri) {
+      console.error('[v0] No connect URI available from gateway test')
+      setGatewayTestResult(prev => prev ? {
+        ...prev,
+        logs: [...prev.logs, '✗ Please run the gateway test first to get a connect URI']
+      } : null)
+      return
     }
+    
+    console.log('[v0] Using cached connect URI:', connectUri)
+    console.log('[v0] Session ID:', sessionId)
     
     setIsConnecting(true)
     
     try {
-      let connectUri = gatewayTestResult?.connectUri
-      let authSession = gatewayTestResult?.authSession
-      let sessionId = gatewayTestResult?.sessionId
-      
-      if (!connectUri || !authSession || !sessionId) {
-        console.log('[v0] Fetching connect account URI...')
-        const { getConnectAccountUri } = await import('@/lib/gateway-test-client')
-        const result = await getConnectAccountUri(connectAccountToken)
-        
-        if (!result.connectUri) {
-          throw new Error('Failed to get connect URI')
-        }
-        
-        connectUri = result.connectUri
-        authSession = result.authSession
-        sessionId = result.sessionId
-        
-        // Update state with the new data
-        setGatewayTestResult(prev => prev ? {
-          ...prev,
-          connectUri,
+      if (authSession && sessionId) {
+        const sessionKey = `ca_session_${sessionId}`
+        sessionStorage.setItem(sessionKey, JSON.stringify({
           authSession,
-          sessionId
-        } : null)
+          meToken: connectAccountToken,
+          codeVerifier
+        }))
+        console.log('[v0] Stored session data for callback with key:', sessionKey)
       }
-      
-      console.log('[v0] Using connect URI:', connectUri)
       
       const width = 600
       const height = 700
