@@ -566,7 +566,7 @@ export function EnterpriseDashboard() {
                           <div className="mt-4 pt-4 border-t">
                             <Button 
                               onClick={handleConnectAccount}
-                              disabled={isConnecting}
+                              disabled={isConnecting || !gatewayTestResult?.connectUri || !gatewayTestResult?.authSession || !gatewayTestResult?.sessionId}
                               className="gap-2"
                             >
                               {isConnecting ? (
