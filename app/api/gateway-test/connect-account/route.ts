@@ -3,7 +3,7 @@ import { generateCodeVerifier, generateCodeChallenge, generateState } from '@/li
 
 export async function POST(request: NextRequest) {
   try {
-    const { meAccessToken } = await request.json()
+    const { meAccessToken, sessionId } = await request.json()
     
     if (!meAccessToken) {
       return NextResponse.json(
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('[v0] Gateway Test: Initiating Salesforce connected account')
+    console.log('[v0]   Session ID:', sessionId)
     
     const auth0Domain = process.env.AUTH0_DOMAIN
     
@@ -35,7 +36,9 @@ export async function POST(request: NextRequest) {
     console.log(`[v0]     State: ${state}`)
     
     const origin = request.headers.get('origin') || request.headers.get('host') || 'http://localhost:3000'
-    const redirectUri = `${origin}/agent/connect-callback`
+    const redirectUri = sessionId 
+      ? `${origin}/agent/connect-callback?session_id=${sessionId}`
+      : `${origin}/agent/connect-callback`
     
     const connectUrl = `${auth0Domain}/me/v1/connected-accounts/connect`
     

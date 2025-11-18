@@ -149,14 +149,17 @@ export function EnterpriseDashboard() {
   }
 
   const handleConnectAccount = async () => {
-    if (!gatewayTestResult?.connectUri) {
-      console.error('[v0] No connect URI available')
+    if (!gatewayTestResult?.connectUri || !gatewayTestResult?.authSession || !connectAccountToken) {
+      console.error('[v0] Missing connect data')
       return
     }
     
     setIsConnecting(true)
     try {
-      console.log('[v0] Opening connect window:', gatewayTestResult.connectUri)
+      const { getConnectAccountUri } = await import('@/lib/gateway-test-client')
+      const connectUri = await getConnectAccountUri(connectAccountToken)
+      
+      console.log('[v0] Opening connect window:', connectUri)
       
       const width = 600
       const height = 700
@@ -164,7 +167,7 @@ export function EnterpriseDashboard() {
       const top = window.screenY + (window.outerHeight - height) / 2
       
       const popup = window.open(
-        gatewayTestResult.connectUri,
+        connectUri,
         'Connect Salesforce Account',
         `width=${width},height=${height},left=${left},top=${top},popup=yes`
       )
@@ -175,7 +178,7 @@ export function EnterpriseDashboard() {
       
       const handleMessage = (event: MessageEvent) => {
         if (event.data.type === 'connected_account_complete') {
-          console.log('[v0] Connected account callback received, connect_code:', event.data.connectCode)
+          console.log('[v0] Connected account callback received')
           window.removeEventListener('message', handleMessage)
           popup?.close()
           
@@ -188,7 +191,6 @@ export function EnterpriseDashboard() {
               ...prev.logs, 
               '', 
               '✓ Salesforce account connected successfully!', 
-              '  Connection completed with connect_code: ' + event.data.connectCode,
               '  You can now retry the gateway request - the federated connection should work'
             ]
           } : null)

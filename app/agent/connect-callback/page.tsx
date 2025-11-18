@@ -16,6 +16,12 @@ function ConnectCallbackContent() {
     const handleCallback = async () => {
       const connectCode = searchParams.get("connect_code")
       const errorParam = searchParams.get("error")
+      const sessionId = searchParams.get("session_id")
+
+      console.log('[v0] Callback received')
+      console.log('[v0]   connect_code:', connectCode)
+      console.log('[v0]   session_id:', sessionId)
+      console.log('[v0]   error:', errorParam)
 
       if (errorParam) {
         setStatus("error")
@@ -26,48 +32,110 @@ function ConnectCallbackContent() {
       if (connectCode) {
         console.log('[v0] Received connect_code, completing connection')
         
+        let authSession: string | null = null
+        let meToken: string | null = null
+        let codeVerifier: string | null = null
+        
+        if (sessionId) {
+          authSession = sessionStorage.getItem(`connect_session_${sessionId}_auth_session`)
+          meToken = sessionStorage.getItem(`connect_session_${sessionId}_me_token`)
+          codeVerifier = sessionStorage.getItem(`connect_session_${sessionId}_code_verifier`)
+          console.log('[v0] Retrieved from session storage with ID:', sessionId)
+          console.log('[v0]   auth_session:', authSession ? 'found' : 'not found')
+          console.log('[v0]   me_token:', meToken ? 'found' : 'not found')
+          console.log('[v0]   code_verifier:', codeVerifier ? 'found' : 'not found')
+        }
+        
+        // Fallback to original keys
+        if (!authSession) {
+          authSession = sessionStorage.getItem("pendingAuthSession")
+          console.log('[v0] Fallback: pendingAuthSession:', authSession ? 'found' : 'not found')
+        }
+        if (!meToken) {
+          meToken = sessionStorage.getItem("pendingMEToken")
+          console.log('[v0] Fallback: pendingMEToken:', meToken ? 'found' : 'not found')
+        }
+        if (!codeVerifier) {
+          codeVerifier = sessionStorage.getItem("pendingCodeVerifier")
+          console.log('[v0] Fallback: pendingCodeVerifier:', codeVerifier ? 'found' : 'not found')
+        }
+        
         // If opened as popup, notify parent and close
         if (window.opener) {
-          console.log('[v0] Popup mode - notifying parent window')
-          window.opener.postMessage({
-            type: 'connected_account_complete',
-            connectCode
-          }, window.location.origin)
+          console.log('[v0] Popup mode detected')
           
-          setStatus("success")
-          setError("Account connected successfully! You can close this window.")
+          if (!authSession || !meToken || !codeVerifier) {
+            console.error('[v0] Missing required data in popup mode')
+            setStatus("error")
+            setError("Missing auth session, ME token, or code verifier. Please try again.")
+            return
+          }
           
-          // Auto-close popup after 2 seconds
-          setTimeout(() => {
-            window.close()
-          }, 2000)
+          try {
+            console.log('[v0] Completing connected account from popup')
+            const { completeConnectedAccount } = await import("@/lib/gateway-test-client")
+            await completeConnectedAccount(authSession, connectCode, meToken, codeVerifier)
+            
+            console.log('[v0] Connection completed, notifying parent window')
+            window.opener.postMessage({
+              type: 'connected_account_complete',
+              connectCode,
+              success: true
+            }, window.location.origin)
+            
+            setStatus("success")
+            setError("Account connected successfully! Closing window...")
+            
+            // Auto-close popup after 1 second
+            setTimeout(() => {
+              window.close()
+            }, 1000)
+          } catch (err: any) {
+            console.error('[v0] Failed to complete connection:', err)
+            setStatus("error")
+            setError(err.message || "Failed to complete connection")
+            
+            // Notify parent of failure
+            window.opener.postMessage({
+              type: 'connected_account_complete',
+              success: false,
+              error: err.message
+            }, window.location.origin)
+          }
+          
           return
         }
 
         // If not a popup, complete the connection directly
-        const authSession = sessionStorage.getItem("pendingAuthSession")
-        const meToken = sessionStorage.getItem("pendingMEToken")
-        const codeVerifier = sessionStorage.getItem("pendingCodeVerifier")
-
         if (!authSession || !meToken) {
+          console.error('[v0] Missing auth session or ME token')
+          console.log('[v0] Available sessionStorage keys:', Object.keys(sessionStorage))
           setStatus("error")
           setError("Missing auth session or ME token")
           return
         }
 
         if (!codeVerifier) {
+          console.error('[v0] Missing code verifier')
           setStatus("error")
           setError("Missing code verifier for PKCE flow")
           return
         }
 
         try {
+          console.log('[v0] Completing connected account directly')
           const { completeConnectedAccount } = await import("@/lib/gateway-test-client")
           await completeConnectedAccount(authSession, connectCode, meToken, codeVerifier)
 
+          if (sessionId) {
+            sessionStorage.removeItem(`connect_session_${sessionId}_auth_session`)
+            sessionStorage.removeItem(`connect_session_${sessionId}_me_token`)
+            sessionStorage.removeItem(`connect_session_${sessionId}_code_verifier`)
+          }
           sessionStorage.removeItem("pendingAuthSession")
           sessionStorage.removeItem("pendingMEToken")
           sessionStorage.removeItem("pendingCodeVerifier")
+          
           setStatus("success")
           setError("Account connected successfully! Redirecting...")
 

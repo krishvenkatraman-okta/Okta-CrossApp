@@ -23,10 +23,12 @@ export async function getConnectAccountUri(meAccessToken: string): Promise<strin
   (window as any).__connectAccountRequestInProgress = true
   
   try {
+    const sessionId = Date.now().toString()
+    
     const response = await fetch('/api/gateway-test/connect-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meAccessToken })
+      body: JSON.stringify({ meAccessToken, sessionId })
     })
     
     if (!response.ok) {
@@ -35,6 +37,14 @@ export async function getConnectAccountUri(meAccessToken: string): Promise<strin
     }
     
     const data = await response.json()
+    
+    // Store session data using the same session ID
+    sessionStorage.setItem(`connect_session_${sessionId}_auth_session`, data.auth_session)
+    sessionStorage.setItem(`connect_session_${sessionId}_me_token`, meAccessToken)
+    sessionStorage.setItem(`connect_session_${sessionId}_code_verifier`, data.code_verifier)
+    
+    console.log('[v0] Session data stored with ID:', sessionId)
+    
     return data.connect_uri
   } finally {
     (window as any).__connectAccountRequestInProgress = false
