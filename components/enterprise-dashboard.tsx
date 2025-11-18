@@ -149,20 +149,46 @@ export function EnterpriseDashboard() {
   }
 
   const handleConnectAccount = async () => {
-    if (!gatewayTestResult?.connectUri || !gatewayTestResult?.authSession || !gatewayTestResult?.sessionId) {
-      console.error('[v0] Missing connect data:', { 
-        hasConnectUri: !!gatewayTestResult?.connectUri,
-        hasAuthSession: !!gatewayTestResult?.authSession,
-        hasSessionId: !!gatewayTestResult?.sessionId
-      })
+    if (!connectAccountToken) {
+      console.error('[v0] No ME access token available')
       return
+    }
+    
+    if (!gatewayTestResult?.connectUri || !gatewayTestResult?.authSession || !gatewayTestResult?.sessionId) {
+      console.log('[v0] Missing connect data, will fetch now')
+      // Let the button proceed with the flow - it will fetch the data
     }
     
     setIsConnecting(true)
     
     try {
-      const connectUri = gatewayTestResult.connectUri
-      console.log('[v0] Using cached connect URI:', connectUri)
+      let connectUri = gatewayTestResult?.connectUri
+      let authSession = gatewayTestResult?.authSession
+      let sessionId = gatewayTestResult?.sessionId
+      
+      if (!connectUri || !authSession || !sessionId) {
+        console.log('[v0] Fetching connect account URI...')
+        const { getConnectAccountUri } = await import('@/lib/gateway-test-client')
+        const result = await getConnectAccountUri(connectAccountToken)
+        
+        if (!result.connectUri) {
+          throw new Error('Failed to get connect URI')
+        }
+        
+        connectUri = result.connectUri
+        authSession = result.authSession
+        sessionId = result.sessionId
+        
+        // Update state with the new data
+        setGatewayTestResult(prev => prev ? {
+          ...prev,
+          connectUri,
+          authSession,
+          sessionId
+        } : null)
+      }
+      
+      console.log('[v0] Using connect URI:', connectUri)
       
       const width = 600
       const height = 700
@@ -564,15 +590,6 @@ export function EnterpriseDashboard() {
                         </div>
                         {showConnectAccount && (
                           <div className="mt-4 pt-4 border-t">
-                            {console.log('[v0] Connect button data:', {
-                              hasConnectUri: !!gatewayTestResult?.connectUri,
-                              hasAuthSession: !!gatewayTestResult?.authSession,
-                              hasSessionId: !!gatewayTestResult?.sessionId,
-                              isConnecting,
-                              connectUri: gatewayTestResult?.connectUri,
-                              authSession: gatewayTestResult?.authSession?.substring(0, 20),
-                              sessionId: gatewayTestResult?.sessionId
-                            })}
                             <Button 
                               onClick={handleConnectAccount}
                               disabled={isConnecting || !connectAccountToken}
