@@ -564,9 +564,18 @@ export function EnterpriseDashboard() {
                         </div>
                         {showConnectAccount && (
                           <div className="mt-4 pt-4 border-t">
+                            {console.log('[v0] Connect button data:', {
+                              hasConnectUri: !!gatewayTestResult?.connectUri,
+                              hasAuthSession: !!gatewayTestResult?.authSession,
+                              hasSessionId: !!gatewayTestResult?.sessionId,
+                              isConnecting,
+                              connectUri: gatewayTestResult?.connectUri,
+                              authSession: gatewayTestResult?.authSession?.substring(0, 20),
+                              sessionId: gatewayTestResult?.sessionId
+                            })}
                             <Button 
                               onClick={handleConnectAccount}
-                              disabled={isConnecting || !gatewayTestResult?.connectUri || !gatewayTestResult?.authSession || !gatewayTestResult?.sessionId}
+                              disabled={isConnecting || !connectAccountToken}
                               className="gap-2"
                             >
                               {isConnecting ? (
