@@ -18,12 +18,17 @@ export async function POST(request: NextRequest) {
     const clientId = process.env.AUTH0_REQUESTING_APP_CLIENT_ID!
     const clientSecret = process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!
     
-    // Use appropriate scope based on resource type
-    const scope = resourceType === 'salesforce' ? 'salesforce:read' : 'finance:read'
+    let scope: string
+    if (resourceType === 'salesforce') {
+      scope = process.env.SALESFORCE_SCOPE || 'salesforce:read'
+    } else {
+      scope = process.env.FINANCE_SCOPE || 'finance:read'
+    }
     
     console.log('[v0] Gateway Test: Token exchange parameters:', {
       tokenEndpoint,
       scope,
+      scopeSource: process.env.SALESFORCE_SCOPE ? 'environment' : 'default',
       clientId: clientId.substring(0, 10) + '...'
     })
     

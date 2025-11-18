@@ -115,7 +115,9 @@ export async function exchangeForAuth0Token(idToken: string): Promise<TokenExcha
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
     
-    const accessToken = await exchangeIdJagForAuth0Token(idJag, process.env.AUTH0_TOKEN_ENDPOINT!, process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, "finance:read")
+    const scope = process.env.FINANCE_SCOPE || "finance:read"
+    
+    const accessToken = await exchangeIdJagForAuth0Token(idJag, process.env.AUTH0_TOKEN_ENDPOINT!, process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, scope)
     console.log("[v0] Step 2 ✓: Auth0 access token received")
     console.log("[v0] ===== AUTH0 TOKEN EXCHANGE (FINANCE) COMPLETED =====")
 
@@ -147,7 +149,9 @@ export async function exchangeForSalesforceAuth0Token(idToken: string): Promise<
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
     
-    const accessToken = await exchangeIdJagForAuth0Token(idJag, process.env.AUTH0_TOKEN_ENDPOINT!, process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, "salesforce:read")
+    const scope = process.env.SALESFORCE_SCOPE || "salesforce:read"
+    
+    const accessToken = await exchangeIdJagForAuth0Token(idJag, process.env.AUTH0_TOKEN_ENDPOINT!, process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, scope)
     console.log("[v0] Step 2 ✓: Auth0 access token received for Salesforce")
     console.log("[v0] ===== AUTH0 TOKEN EXCHANGE (SALESFORCE) COMPLETED =====")
 
