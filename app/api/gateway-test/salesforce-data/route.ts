@@ -16,16 +16,18 @@ export async function POST(request: NextRequest) {
     console.log('[v0]   Method: GET')
     console.log('[v0]   Headers:')
     console.log(`[v0]     Authorization: Bearer ${accessToken.substring(0, 30)}...`)
-    console.log(`[v0]     x-gateway-host: ${hostname}`)
+    console.log(`[v0]     X-GATEWAY-Host: ${hostname}`)
     console.log(`[v0]     Content-Type: application/json`)
-    console.log(`[v0]   Expected proxied endpoint: https://${hostname}/opportunities`)
+    console.log(`[v0]     Accept: application/json`)
+    console.log(`[v0]   Expected proxied endpoint: https://${hostname}/services/data/v62.0/sobjects/Opportunity`)
     
     const response = await fetch(gatewayUrl, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'x-gateway-host': hostname,
-        'Content-Type': 'application/json'
+        'X-GATEWAY-Host': hostname,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       }
     })
     

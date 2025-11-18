@@ -122,7 +122,8 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
     const hostname = salesforceDomain.replace(/^https?:\/\//, '')
     
     if (gatewayMode && gatewayUrl) {
-      const fullUrl = `${gatewayUrl}/opportunities`
+      const salesforceEndpoint = '/services/data/v62.0/sobjects/Opportunity'
+      const fullUrl = `${gatewayUrl}${salesforceEndpoint}`
       logs.push(`  Gateway URL: ${fullUrl}`)
       logs.push(`  Request Details:`)
       logs.push(`    Method: GET`)
@@ -130,7 +131,7 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
       logs.push(`    Headers:`)
       logs.push(`      Authorization: Bearer ${auth0Data.accessToken.substring(0, 30)}...`)
       logs.push(`      X-GATEWAY-Host: ${hostname}`)
-      logs.push(`    Expected Salesforce endpoint: https://${hostname}/opportunities`)
+      logs.push(`    Expected Salesforce endpoint: https://${hostname}${salesforceEndpoint}`)
       
       const gatewayResponse = await fetch('/api/gateway-test/salesforce-data', {
         method: 'POST',
