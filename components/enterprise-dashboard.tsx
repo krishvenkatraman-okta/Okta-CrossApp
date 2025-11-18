@@ -149,17 +149,20 @@ export function EnterpriseDashboard() {
   }
 
   const handleConnectAccount = async () => {
-    if (!gatewayTestResult?.connectUri || !gatewayTestResult?.authSession || !connectAccountToken) {
-      console.error('[v0] Missing connect data')
+    if (!gatewayTestResult?.connectUri || !gatewayTestResult?.authSession || !gatewayTestResult?.sessionId) {
+      console.error('[v0] Missing connect data:', { 
+        hasConnectUri: !!gatewayTestResult?.connectUri,
+        hasAuthSession: !!gatewayTestResult?.authSession,
+        hasSessionId: !!gatewayTestResult?.sessionId
+      })
       return
     }
     
     setIsConnecting(true)
+    
     try {
-      const { getConnectAccountUri } = await import('@/lib/gateway-test-client')
-      const connectUri = await getConnectAccountUri(connectAccountToken)
-      
-      console.log('[v0] Opening connect window:', connectUri)
+      const connectUri = gatewayTestResult.connectUri
+      console.log('[v0] Using cached connect URI:', connectUri)
       
       const width = 600
       const height = 700
@@ -173,10 +176,12 @@ export function EnterpriseDashboard() {
       )
       
       if (!popup) {
+        setIsConnecting(false)
         throw new Error('Popup blocked. Please allow popups for this site.')
       }
       
       const handleMessage = (event: MessageEvent) => {
+        console.log('[v0] Received message:', event.data)
         if (event.data.type === 'connected_account_complete') {
           console.log('[v0] Connected account callback received')
           window.removeEventListener('message', handleMessage)
@@ -204,6 +209,7 @@ export function EnterpriseDashboard() {
           clearInterval(checkClosed)
           window.removeEventListener('message', handleMessage)
           setIsConnecting(false)
+          console.log('[v0] Popup closed')
         }
       }, 500)
       
