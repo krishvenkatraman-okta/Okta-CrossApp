@@ -77,6 +77,13 @@ export async function exchangeIdJagForAuth0Token(
     requestParams.audience = audience
   }
   
+  console.log("[v0] - Request body parameters:")
+  console.log("[v0]   - grant_type:", requestParams.grant_type)
+  console.log("[v0]   - scope:", requestParams.scope)
+  console.log("[v0]   - audience:", requestParams.audience || 'not set')
+  console.log("[v0]   - client_id:", clientId.substring(0, 20) + '...')
+  console.log("[v0]   - assertion:", idJag.substring(0, 50) + '...')
+  
   const auth0RequestBody = new URLSearchParams(requestParams)
 
   const auth0Response = await fetch(tokenEndpoint, {
@@ -94,6 +101,9 @@ export async function exchangeIdJagForAuth0Token(
   const auth0Data = await auth0Response.json()
   console.log("[v0] Auth0 access token received")
   console.log("[v0] - Token preview:", auth0Data.access_token.substring(0, 50) + '...')
+  if (auth0Data.scope) {
+    console.log("[v0] - Granted scope:", auth0Data.scope)
+  }
   
   return auth0Data.access_token
 }
