@@ -154,14 +154,26 @@ export async function exchangeForSalesforceAuth0Token(idToken: string): Promise<
     // Step 1: Get ID-JAG from Okta with Salesforce resource
     console.log("[v0] Step 1: Requesting ID-JAG from Okta with Salesforce resource")
     
-    const idJag = await requestIdJag(idToken, process.env.SALESFORCE_RESOURCE!, process.env.AUTH0_AUDIENCE!)
+    const salesforceResource = process.env.SALESFORCE_DOMAIN || process.env.SALESFORCE_RESOURCE
+    if (!salesforceResource) {
+      throw new Error("SALESFORCE_DOMAIN environment variable is not set")
+    }
+    
+    const idJag = await requestIdJag(idToken, salesforceResource, process.env.AUTH0_AUDIENCE!)
 
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
     
     const scope = process.env.SALESFORCE_SCOPE || "salesforce:read"
     
-    const accessToken = await exchangeIdJagForAuth0Token(idJag, process.env.AUTH0_TOKEN_ENDPOINT!, process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, scope)
+    const accessToken = await exchangeIdJagForAuth0Token(
+      idJag, 
+      process.env.AUTH0_TOKEN_ENDPOINT!, 
+      process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, 
+      process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, 
+      scope,
+      salesforceResource // Pass as audience
+    )
     console.log("[v0] Step 2 ✓: Auth0 access token received for Salesforce")
     console.log("[v0] ===== AUTH0 TOKEN EXCHANGE (SALESFORCE) COMPLETED =====")
 

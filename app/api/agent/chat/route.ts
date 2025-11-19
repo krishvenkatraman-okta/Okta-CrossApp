@@ -16,15 +16,44 @@ function createTools(req: Request) {
         if (!idToken) {
           throw new Error("Not authenticated. Please log in with Okta Gateway first.")
         }
+        console.log(`[v0] Step 1: Web ID Token retrieved`)
 
-        const { idJag, accessToken } = await exchangeForSalesforceAuth0Token(idToken)
+        const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
+        const jagResponse = await fetch(`${baseUrl}/api/gateway-test/salesforce-jag`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        })
+
+        if (!jagResponse.ok) {
+          const error = await jagResponse.json()
+          throw new Error(`ID-JAG exchange failed: ${error.message}`)
+        }
+
+        const jagData = await jagResponse.json()
+        const idJagToken = jagData.idJagToken
+        console.log(`[v0] Step 2 ✓: Salesforce ID-JAG received`)
+
+        const auth0Response = await fetch(`${baseUrl}/api/gateway-test/auth0-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idJagToken, resourceType: 'salesforce' })
+        })
+
+        if (!auth0Response.ok) {
+          const error = await auth0Response.json()
+          throw new Error(`Auth0 token exchange failed: ${error.message}`)
+        }
+
+        const auth0Data = await auth0Response.json()
+        const accessToken = auth0Data.accessToken
+        console.log(`[v0] Step 3 ✓: Auth0 Access Token received`)
+
         const salesforceDomain = process.env.SALESFORCE_DOMAIN
-        
         if (!salesforceDomain) {
           throw new Error("SALESFORCE_DOMAIN not configured")
         }
 
-        // Import dynamically to avoid circular dependencies
         const { discoverSalesforceSchema, generateSalesforceToolDescription } = await import('@/lib/salesforce-schema-discovery')
         
         const schema = await discoverSalesforceSchema(salesforceDomain, accessToken)
@@ -65,15 +94,44 @@ function createTools(req: Request) {
         if (!idToken) {
           throw new Error("Not authenticated")
         }
+        console.log(`[v0] Step 1: Web ID Token retrieved`)
 
-        const { idJag, accessToken } = await exchangeForSalesforceAuth0Token(idToken)
+        const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
+        const jagResponse = await fetch(`${baseUrl}/api/gateway-test/salesforce-jag`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        })
+
+        if (!jagResponse.ok) {
+          const error = await jagResponse.json()
+          throw new Error(`ID-JAG exchange failed: ${error.message}`)
+        }
+
+        const jagData = await jagResponse.json()
+        const idJagToken = jagData.idJagToken
+        console.log(`[v0] Step 2 ✓: Salesforce ID-JAG received`)
+
+        const auth0Response = await fetch(`${baseUrl}/api/gateway-test/auth0-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idJagToken, resourceType: 'salesforce' })
+        })
+
+        if (!auth0Response.ok) {
+          const error = await auth0Response.json()
+          throw new Error(`Auth0 token exchange failed: ${error.message}`)
+        }
+
+        const auth0Data = await auth0Response.json()
+        const accessToken = auth0Data.accessToken
+        console.log(`[v0] Step 3 ✓: Auth0 Access Token received`)
         
-        // Build SOQL query
         const soql = `SELECT ${fields.join(', ')} FROM ${objectName}${whereClause ? ` WHERE ${whereClause}` : ''} LIMIT ${limit}`
         console.log(`[v0] SOQL: ${soql}`)
         
         const tokenData = {
-          salesforce_id_jag_token: idJag,
+          salesforce_id_jag_token: idJagToken,
           salesforce_auth0_access_token: accessToken
         }
 
@@ -82,21 +140,22 @@ function createTools(req: Request) {
         const salesforceDomain = process.env.SALESFORCE_DOMAIN
 
         if (gatewayMode && gatewayUrl && salesforceDomain) {
-          // Use gateway
+          console.log(`[v0] Step 4: Calling gateway via /api/gateway-test/salesforce-data`)
           const encodedQuery = encodeURIComponent(soql)
           const endpoint = `/services/data/v62.0/query?q=${encodedQuery}`
           const fullUrl = `${gatewayUrl}${endpoint}`
-          const gatewayHost = salesforceDomain.replace(/^https?:\/\//, '')
+          const hostname = salesforceDomain.replace(/^https?:\/\//, '')
           
-          console.log(`[v0] Making gateway request to: ${fullUrl}`)
+          console.log(`[v0] Making gateway request via API route`)
           
-          const response = await fetch(fullUrl, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-              "Accept": "application/json",
-              "x-gateway-host": gatewayHost
-            }
+          const response = await fetch(`${baseUrl}/api/gateway-test/salesforce-data`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              accessToken,
+              gatewayUrl: fullUrl,
+              hostname
+            })
           })
 
           console.log(`[v0] Gateway response status: ${response.status}`)
@@ -130,18 +189,7 @@ function createTools(req: Request) {
             tokens: tokenData
           }
         } else {
-          // Direct API call (fallback)
-          const { createSalesforceConnection } = await import('@/lib/salesforce-client')
-          const conn = createSalesforceConnection(salesforceDomain!, accessToken)
-          const result = await conn.query(soql)
-          
-          return {
-            success: true,
-            data: result,
-            query: soql,
-            message: `Successfully retrieved ${result.records?.length || 0} ${objectName} records`,
-            tokens: tokenData
-          }
+          throw new Error('Gateway mode is not enabled. Please set GATEWAY_MODE=true and GATEWAY_URL')
         }
       } catch (error) {
         console.error(`[v0] Query error:`, error)
@@ -196,135 +244,6 @@ function createTools(req: Request) {
     }
   })
 
-  const getSalesforceDataTool = tool({
-    description: "Get Salesforce data such as opportunities, leads, or accounts through the gateway",
-    inputSchema: z.object({
-      dataType: z.enum(["opportunities", "leads", "accounts"]).describe("Type of Salesforce data to retrieve"),
-    }),
-    execute: async ({ dataType }) => {
-      console.log(`[v0] ===== SALESFORCE DATA REQUEST STARTED =====`)
-      console.log(`[v0] Step 1: Agent requesting Salesforce ${dataType}`)
-
-      try {
-        console.log(`[v0] Step 2: Checking for authentication cookie`)
-        const idToken = getIdTokenFromCookies(req)
-        if (!idToken) {
-          console.log(`[v0] ERROR: No ID token found in cookies`)
-          throw new Error("Not authenticated. Please log in with Okta Gateway first.")
-        }
-        console.log(`[v0] Step 2 ✓: ID token found, length: ${idToken.length}`)
-
-        console.log(`[v0] Step 3: Starting Salesforce Auth0 token exchange`)
-        const { idJag, accessToken } = await exchangeForSalesforceAuth0Token(idToken)
-        console.log(`[v0] Step 3 ✓: Salesforce Auth0 token obtained`)
-        console.log(`[v0] - ID-JAG length: ${idJag.length}`)
-        console.log(`[v0] - Access Token length: ${accessToken.length}`)
-
-        const tokenData = {
-          salesforce_id_jag_token: idJag,
-          salesforce_auth0_access_token: accessToken,
-        }
-
-        const gatewayMode = process.env.GATEWAY_MODE === "true"
-        const gatewayUrl = process.env.GATEWAY_URL
-        const salesforceDomain = process.env.SALESFORCE_DOMAIN
-
-        console.log(`[v0] Step 4: Checking gateway configuration`)
-        console.log(`[v0] - Gateway Mode: ${gatewayMode}`)
-        console.log(`[v0] - Gateway URL: ${gatewayUrl || "NOT SET"}`)
-        console.log(`[v0] - Salesforce Domain: ${salesforceDomain || "NOT SET"}`)
-
-        if (gatewayMode && gatewayUrl && salesforceDomain) {
-          console.log(`[v0] Step 5: Preparing gateway request`)
-          
-          const endpointMap: Record<string, string> = {
-            opportunities: "/services/data/v57.0/query?q=SELECT+Id,Name,Amount,StageName+FROM+Opportunity+LIMIT+10",
-            leads: "/services/data/v57.0/query?q=SELECT+Id,Name,Company,Status+FROM+Lead+LIMIT+10",
-            accounts: "/services/data/v57.0/query?q=SELECT+Id,Name,Industry+FROM+Account+LIMIT+10",
-          }
-
-          const salesforceEndpoint = endpointMap[dataType] || endpointMap.opportunities
-          const fullGatewayUrl = `${gatewayUrl}${salesforceEndpoint}`
-          
-          const gatewayHost = salesforceDomain.replace(/^https?:\/\//, '')
-          
-          console.log(`[v0] - Salesforce API endpoint: ${salesforceEndpoint}`)
-          console.log(`[v0] - Full gateway URL: ${fullGatewayUrl}`)
-          console.log(`[v0] - Salesforce Domain (raw): ${salesforceDomain}`)
-          console.log(`[v0] - x-gateway-host header (stripped): ${gatewayHost}`)
-
-          console.log(`[v0] Step 6: Making gateway request`)
-          const response = await fetch(fullGatewayUrl, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "x-gateway-host": gatewayHost,
-            },
-          })
-
-          console.log(`[v0] Step 6 ✓: Gateway response received - Status: ${response.status}`)
-
-          if (!response.ok) {
-            console.log(`[v0] ERROR: Gateway request failed with status ${response.status}`)
-            const errorData = await response.json().catch(() => ({}))
-            console.log(`[v0] ERROR: Gateway error response:`, errorData)
-
-            if (errorData.error === "federated_connection_refresh_token_not_found") {
-              console.log(`[v0] SPECIAL CASE: Connected account required for Salesforce`)
-              return {
-                success: false,
-                requiresConnection: true,
-                message: "Connected account required. Please connect your Salesforce account.",
-                error: errorData.error,
-                tokens: tokenData,
-              }
-            }
-
-            throw new Error(`Gateway request failed: ${response.status}`)
-          }
-
-          const data = await response.json()
-          console.log(`[v0] Step 7 ✓: Gateway data parsed successfully`)
-          console.log(`[v0] - Records returned: ${data.records?.length || 0}`)
-          console.log(`[v0] ===== SALESFORCE DATA REQUEST COMPLETED =====`)
-
-          return {
-            success: true,
-            dataType,
-            data,
-            message: `Successfully retrieved ${dataType} from Salesforce`,
-            tokens: tokenData,
-          }
-        } else {
-          console.log(`[v0] WARNING: Gateway mode disabled or missing configuration`)
-          console.log(`[v0] - GATEWAY_MODE: ${process.env.GATEWAY_MODE}`)
-          console.log(`[v0] - GATEWAY_URL: ${gatewayUrl ? "SET" : "NOT SET"}`)
-          console.log(`[v0] - SALESFORCE_DOMAIN: ${salesforceDomain ? "SET" : "NOT SET"}`)
-          console.log(`[v0] ===== SALESFORCE DATA REQUEST COMPLETED (NO GATEWAY) =====`)
-          
-          return {
-            success: false,
-            dataType,
-            message: `Gateway mode is not fully configured. Please set GATEWAY_MODE=true, GATEWAY_URL, and SALESFORCE_DOMAIN environment variables.`,
-            mockData: true,
-            tokens: tokenData,
-          }
-        }
-      } catch (error) {
-        console.error(`[v0] ===== SALESFORCE DATA REQUEST FAILED =====`)
-        console.error(`[v0] Error in getSalesforceData tool:`, error)
-        if (error instanceof Error) {
-          console.error(`[v0] Error message: ${error.message}`)
-          console.error(`[v0] Error stack:`, error.stack)
-        }
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-          message: `Failed to retrieve Salesforce ${dataType}`,
-        }
-      }
-    },
-  })
-
   const getFinancialDataTool = tool({
     description: "Get financial data such as revenue, expenses, or profit information",
     inputSchema: z.object({
@@ -335,15 +254,12 @@ function createTools(req: Request) {
       console.log(`[v0] Step 1: Agent requesting financial ${dataType}`)
 
       try {
-        console.log(`[v0] Step 2: Checking for authentication cookie`)
         const idToken = getIdTokenFromCookies(req)
         if (!idToken) {
-          console.log(`[v0] ERROR: No ID token found in cookies`)
           throw new Error("Not authenticated. Please log in with Okta Gateway first.")
         }
         console.log(`[v0] Step 2 ✓: ID token found, length: ${idToken.length}`)
 
-        console.log(`[v0] Step 3: Starting Financial Auth0 token exchange`)
         const { idJag, accessToken } = await exchangeForAuth0Token(idToken)
         console.log(`[v0] Step 3 ✓: Financial Auth0 token obtained`)
         console.log(`[v0] - ID-JAG length: ${idJag.length}`)
@@ -367,7 +283,6 @@ function createTools(req: Request) {
         console.log(`[v0] Step 4 ✓: Financial API response received - Status: ${response.status}`)
 
         if (!response.ok) {
-          console.log(`[v0] ERROR: Financial API request failed with status ${response.status}`)
           throw new Error(`Financial API request failed: ${response.status}`)
         }
 
@@ -387,7 +302,7 @@ function createTools(req: Request) {
         console.error(`[v0] Error in getFinancialData tool:`, error)
         if (error instanceof Error) {
           console.error(`[v0] Error message: ${error.message}`)
-          console.error(`[v0] Error stack:`, error.stack)
+          console.error(`[v0] Error stack: ${error.stack}`)
         }
         return {
           success: false,
@@ -402,7 +317,6 @@ function createTools(req: Request) {
     discoverSalesforceSchema,
     querySalesforceData,
     connectSalesforceAccount,
-    getSalesforceData: getSalesforceDataTool,
     getFinancialData: getFinancialDataTool
   }
 }
