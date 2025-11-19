@@ -279,61 +279,35 @@ export async function POST(req: Request) {
 
   console.log(`[v0] Calling Claude Sonnet 4 model...`)
   
-  const result = streamText({
+  const result = await streamText({
     model: "anthropic/claude-sonnet-4",
     system: `You are an AI agent that helps users access enterprise data through Okta cross-app access and Auth0 gateway.
     
-When a user asks for Salesforce data (like opportunities, accounts, leads), you must:
-1. Use the querySalesforceData tool
-2. IMMEDIATELY after receiving the tool result, present the data to the user in a formatted way
-3. NEVER just acknowledge the request - always show the actual records returned
-
-Example:
-User: "Get Salesforce opportunities"
-You: "I'll retrieve Salesforce opportunities for you."
-[Tool executes and returns data]
-You: "Here are the Salesforce opportunities I found:
-
-**Opportunity 1:**
-- Name: Acme Deal
-- Amount: $50,000
-- Stage: Prospecting
-
-**Opportunity 2:**
-..."
-
-You MUST format and display the actual records returned by the tool.`,
+When a user asks for Salesforce data, use the querySalesforceData tool and then present the results.`,
     messages: prompt,
     tools,
     maxTokens: 4000,
     maxSteps: 15,
     experimental_continueSteps: true,
-    onStepFinish: async ({ text, toolCalls, toolResults, finishReason }) => {
+    onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {
       console.log(`[v0] ===== STEP FINISHED =====`)
       console.log(`[v0] Finish reason: ${finishReason}`)
-      console.log(`[v0] Text generated in this step: "${text}"`)
-      console.log(`[v0] Tool calls: ${toolCalls?.length || 0}`)
-      console.log(`[v0] Tool results: ${toolResults?.length || 0}`)
+      console.log(`[v0] Text generated: "${text}"`)
+      console.log(`[v0] Tool results count: ${toolResults?.length || 0}`)
       
       if (toolResults && toolResults.length > 0) {
         toolResults.forEach((result, index) => {
-          console.log(`[v0] Tool result ${index + 1}:`, typeof result.result)
+          console.log(`[v0] Tool ${index + 1} result type:`, typeof result.result)
           if (typeof result.result === 'string') {
-            console.log(`[v0] String result length: ${result.result.length} characters`)
-            console.log(`[v0] String result (first 500 chars): ${result.result.substring(0, 500)}`)
-          } else {
-            console.log(`[v0] Object result:`, JSON.stringify(result.result).substring(0, 500))
+            console.log(`[v0] Result preview: ${result.result.substring(0, 200)}...`)
           }
         })
-      }
-      
-      if (toolResults && toolResults.length > 0 && (!text || text.trim() === '')) {
-        console.log(`[v0] WARNING: Tool executed but no text generated in response!`)
       }
     }
   })
 
   console.log(`[v0] Streaming response to client`)
+  
   return result.toUIMessageStreamResponse()
 }
 
