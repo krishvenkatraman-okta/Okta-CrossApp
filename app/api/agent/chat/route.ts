@@ -288,19 +288,36 @@ Common Salesforce objects and fields:
 - Account: Id, Name, Industry, Type, BillingCity
 - Lead: Id, Name, Company, Email, Status
 
-CRITICAL: After calling querySalesforceData and receiving results, you MUST display the data to the user. 
-DO NOT just acknowledge that you'll retrieve data - actually show the records you received.
-Present the results in a clear, formatted table or list showing the key fields from each record.
+CRITICAL INSTRUCTION: After you call querySalesforceData and receive data back, you MUST immediately present that data to the user in a formatted way.
+The tool will return a string with all the records. You need to output that entire string or format it nicely for the user.
+DO NOT stop after just saying "I'll retrieve..." - you must show the actual records.
 
 If a tool returns requiresConnection: true, explain that the user needs to connect their Salesforce account first using the UI.
 
 For financial data, use the getFinancialData tool.
 
-Always show the actual data you retrieve, not just a promise to retrieve it.`,
+Remember: Always display the data you retrieve!`,
     messages: prompt,
     tools,
     maxTokens: 4000,
-    maxSteps: 5 // Allow multiple tool calls and responses
+    maxSteps: 10, // Increase maxSteps to ensure LLM can generate follow-up
+    onStepFinish: async ({ text, toolCalls, toolResults }) => {
+      console.log(`[v0] ===== STEP FINISHED =====`)
+      console.log(`[v0] Text generated in this step: "${text}"`)
+      console.log(`[v0] Tool calls: ${toolCalls?.length || 0}`)
+      console.log(`[v0] Tool results: ${toolResults?.length || 0}`)
+      
+      if (toolResults && toolResults.length > 0) {
+        toolResults.forEach((result, index) => {
+          console.log(`[v0] Tool result ${index + 1}:`, typeof result.result)
+          if (typeof result.result === 'string') {
+            console.log(`[v0] String result (first 300 chars): ${result.result.substring(0, 300)}`)
+          } else {
+            console.log(`[v0] Object result:`, JSON.stringify(result.result).substring(0, 500))
+          }
+        })
+      }
+    }
   })
 
   console.log(`[v0] Streaming response to client`)
