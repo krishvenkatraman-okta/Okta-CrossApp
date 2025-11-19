@@ -666,7 +666,7 @@ export function EnterpriseDashboard() {
                               </Button>
                             </div>
                             <p className="text-xs mt-2 text-muted-foreground">
-                              Connect to authorize Salesforce access or delete existing connection
+                              Click to authorize Salesforce access in a popup window or delete existing connection
                             </p>
                           </div>
                         )}

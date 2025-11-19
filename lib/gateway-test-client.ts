@@ -12,6 +12,8 @@ export interface GatewayTestResult {
   logs: string[]
   connectUri?: string
   authSession?: string
+  sessionId?: string
+  codeVerifier?: string
 }
 
 export async function getConnectAccountUri(meAccessToken: string): Promise<string> {
@@ -54,6 +56,7 @@ export async function getConnectAccountUri(meAccessToken: string): Promise<strin
 export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
   const logs: string[] = []
   const tokens: GatewayTestResult['tokens'] = {}
+  const sessionId = Date.now().toString()
   
   try {
     logs.push('=== Starting Salesforce Gateway Test Flow ===')
@@ -232,7 +235,9 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
             tokens,
             logs,
             connectUri: authUrl,
-            authSession: connectData.auth_session
+            authSession: connectData.auth_session,
+            sessionId,
+            codeVerifier: connectData.code_verifier
           }
         }
         
@@ -249,7 +254,9 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
         success: true,
         data,
         tokens,
-        logs
+        logs,
+        sessionId,
+        codeVerifier: jagData.code_verifier
       }
     } else {
       logs.push(`✗ Gateway configuration:`)
@@ -267,7 +274,8 @@ export async function testSalesforceGatewayFlow(): Promise<GatewayTestResult> {
       success: false,
       error: error instanceof Error ? error.message : String(error),
       tokens,
-      logs
+      logs,
+      sessionId
     }
   }
 }
