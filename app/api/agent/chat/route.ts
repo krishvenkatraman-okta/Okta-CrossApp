@@ -1,6 +1,6 @@
 import { convertToModelMessages, streamText, tool, UIMessage } from "ai"
 import { z } from "zod"
-import { exchangeForAuth0Token, exchangeForSalesforceAuth0Token, getIdTokenFromCookies } from "@/lib/server-token-exchange"
+import { getIdTokenFromCookies, requestIdJag, exchangeIdJagForAuth0Token } from "@/lib/server-token-exchange"
 
 export const maxDuration = 30
 
@@ -16,43 +16,28 @@ function createTools(req: Request) {
         if (!idToken) {
           throw new Error("Not authenticated. Please log in with Okta Gateway first.")
         }
-        console.log(`[v0] Step 1: Web ID Token retrieved`)
-
-        const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
-        const jagResponse = await fetch(`${baseUrl}/api/gateway-test/salesforce-jag`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken })
-        })
-
-        if (!jagResponse.ok) {
-          const error = await jagResponse.json()
-          throw new Error(`ID-JAG exchange failed: ${error.message}`)
-        }
-
-        const jagData = await jagResponse.json()
-        const idJagToken = jagData.idJagToken
-        console.log(`[v0] Step 2 ✓: Salesforce ID-JAG received`)
-
-        const auth0Response = await fetch(`${baseUrl}/api/gateway-test/auth0-token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idJagToken, resourceType: 'salesforce' })
-        })
-
-        if (!auth0Response.ok) {
-          const error = await auth0Response.json()
-          throw new Error(`Auth0 token exchange failed: ${error.message}`)
-        }
-
-        const auth0Data = await auth0Response.json()
-        const accessToken = auth0Data.accessToken
-        console.log(`[v0] Step 3 ✓: Auth0 Access Token received`)
+        console.log(`[v0] Step 1 ✓: Web ID Token retrieved`)
 
         const salesforceDomain = process.env.SALESFORCE_DOMAIN
-        if (!salesforceDomain) {
-          throw new Error("SALESFORCE_DOMAIN not configured")
+        const auth0Audience = process.env.AUTH0_AUDIENCE
+        
+        if (!salesforceDomain || !auth0Audience) {
+          throw new Error("SALESFORCE_DOMAIN or AUTH0_AUDIENCE not configured")
         }
+
+        const idJagToken = await requestIdJag(idToken, salesforceDomain, auth0Audience)
+        console.log(`[v0] Step 2 ✓: Salesforce ID-JAG received`)
+
+        const scope = process.env.SALESFORCE_SCOPE || "salesforce:read"
+        const accessToken = await exchangeIdJagForAuth0Token(
+          idJagToken,
+          process.env.AUTH0_TOKEN_ENDPOINT!,
+          process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
+          process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
+          scope,
+          salesforceDomain // Add audience parameter for proper token exchange
+        )
+        console.log(`[v0] Step 3 ✓: Auth0 Access Token received`)
 
         const { discoverSalesforceSchema, generateSalesforceToolDescription } = await import('@/lib/salesforce-schema-discovery')
         
@@ -94,37 +79,27 @@ function createTools(req: Request) {
         if (!idToken) {
           throw new Error("Not authenticated")
         }
-        console.log(`[v0] Step 1: Web ID Token retrieved`)
+        console.log(`[v0] Step 1 ✓: Web ID Token retrieved`)
 
-        const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
-        const jagResponse = await fetch(`${baseUrl}/api/gateway-test/salesforce-jag`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken })
-        })
-
-        if (!jagResponse.ok) {
-          const error = await jagResponse.json()
-          throw new Error(`ID-JAG exchange failed: ${error.message}`)
+        const salesforceDomain = process.env.SALESFORCE_DOMAIN
+        const auth0Audience = process.env.AUTH0_AUDIENCE
+        
+        if (!salesforceDomain || !auth0Audience) {
+          throw new Error("SALESFORCE_DOMAIN or AUTH0_AUDIENCE not configured")
         }
 
-        const jagData = await jagResponse.json()
-        const idJagToken = jagData.idJagToken
+        const idJagToken = await requestIdJag(idToken, salesforceDomain, auth0Audience)
         console.log(`[v0] Step 2 ✓: Salesforce ID-JAG received`)
 
-        const auth0Response = await fetch(`${baseUrl}/api/gateway-test/auth0-token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idJagToken, resourceType: 'salesforce' })
-        })
-
-        if (!auth0Response.ok) {
-          const error = await auth0Response.json()
-          throw new Error(`Auth0 token exchange failed: ${error.message}`)
-        }
-
-        const auth0Data = await auth0Response.json()
-        const accessToken = auth0Data.accessToken
+        const scope = process.env.SALESFORCE_SCOPE || "salesforce:read"
+        const accessToken = await exchangeIdJagForAuth0Token(
+          idJagToken,
+          process.env.AUTH0_TOKEN_ENDPOINT!,
+          process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
+          process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
+          scope,
+          salesforceDomain // Add audience parameter for proper token exchange
+        )
         console.log(`[v0] Step 3 ✓: Auth0 Access Token received`)
         
         const soql = `SELECT ${fields.join(', ')} FROM ${objectName}${whereClause ? ` WHERE ${whereClause}` : ''} LIMIT ${limit}`
@@ -137,25 +112,25 @@ function createTools(req: Request) {
 
         const gatewayMode = process.env.GATEWAY_MODE === "true"
         const gatewayUrl = process.env.GATEWAY_URL
-        const salesforceDomain = process.env.SALESFORCE_DOMAIN
 
         if (gatewayMode && gatewayUrl && salesforceDomain) {
-          console.log(`[v0] Step 4: Calling gateway via /api/gateway-test/salesforce-data`)
+          console.log(`[v0] Step 4: Calling gateway`)
           const encodedQuery = encodeURIComponent(soql)
           const endpoint = `/services/data/v62.0/query?q=${encodedQuery}`
           const fullUrl = `${gatewayUrl}${endpoint}`
           const hostname = salesforceDomain.replace(/^https?:\/\//, '')
           
-          console.log(`[v0] Making gateway request via API route`)
+          console.log(`[v0] Gateway URL: ${fullUrl}`)
+          console.log(`[v0] X-GATEWAY-Host: ${hostname}`)
           
-          const response = await fetch(`${baseUrl}/api/gateway-test/salesforce-data`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              accessToken,
-              gatewayUrl: fullUrl,
-              hostname
-            })
+          const response = await fetch(fullUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-GATEWAY-Host': hostname
+            }
           })
 
           console.log(`[v0] Gateway response status: ${response.status}`)
@@ -175,7 +150,7 @@ function createTools(req: Request) {
               }
             }
 
-            throw new Error(`Gateway request failed: ${response.status}`)
+            throw new Error(`Gateway request failed: ${response.status} - ${JSON.stringify(errorData)}`)
           }
 
           const data = await response.json()
