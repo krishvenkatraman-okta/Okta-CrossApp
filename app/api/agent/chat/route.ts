@@ -116,11 +116,19 @@ function createTools(req: Request) {
         console.log(`[v0] Query successful, records: ${data.records?.length || 0}`)
         console.log(`[v0] ===== SALESFORCE QUERY COMPLETED =====`)
         
+        const records = data.records || []
+        const formattedRecords = records.map((record: any) => {
+          const { attributes, ...rest } = record
+          return rest
+        })
+        
         return {
           success: true,
-          data,
+          recordCount: records.length,
+          records: formattedRecords,
           query: soql,
-          message: `Successfully retrieved ${data.records?.length || 0} ${objectName} records`,
+          summary: `Retrieved ${records.length} ${objectName} record(s) from Salesforce via Auth0 gateway`,
+          details: `Query executed: ${soql}`,
           tokens: tokenData
         }
       } catch (error) {
