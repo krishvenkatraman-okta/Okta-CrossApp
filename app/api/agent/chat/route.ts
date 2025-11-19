@@ -117,20 +117,20 @@ function createTools(req: Request) {
         console.log(`[v0] ===== SALESFORCE QUERY COMPLETED =====`)
         
         const records = data.records || []
-        const formattedRecords = records.map((record: any) => {
-          const { attributes, ...rest } = record
-          return rest
-        })
         
-        return {
-          success: true,
-          recordCount: records.length,
-          records: formattedRecords,
-          query: soql,
-          summary: `Retrieved ${records.length} ${objectName} record(s) from Salesforce via Auth0 gateway`,
-          details: `Query executed: ${soql}`,
-          tokens: tokenData
-        }
+        // Format records in a simple, readable way
+        const formattedOutput = records.map((record: any, index: number) => {
+          const { attributes, ...rest } = record
+          return `Record ${index + 1}: ${JSON.stringify(rest, null, 2)}`
+        }).join('\n\n')
+        
+        const resultMessage = `Found ${records.length} ${objectName} records:\n\n${formattedOutput}`
+        
+        console.log(`[v0] Returning formatted result to LLM`)
+        
+        // Return a simple string that the LLM can easily present
+        return resultMessage
+        
       } catch (error) {
         console.error(`[v0] Query error:`, error)
         return {
@@ -298,4 +298,12 @@ Always explain what you're doing and present the results in a clear, user-friend
 
   console.log(`[v0] Streaming response to client`)
   return result.toUIMessageStreamResponse()
+}
+
+async function exchangeForAuth0Token(idToken: string) {
+  // Placeholder function to simulate token exchange
+  return {
+    idJag: "simulated_id_jag_token",
+    accessToken: "simulated_access_token"
+  }
 }
