@@ -282,6 +282,9 @@ Common Salesforce objects and fields:
 - Account: Id, Name, Industry, Type, BillingCity
 - Lead: Id, Name, Company, Email, Status
 
+When you receive data from the querySalesforceData tool, ALWAYS present the results to the user in a clear, formatted way.
+Display the key fields from each record and summarize what was found.
+
 If a tool returns requiresConnection: true, explain that the user needs to connect their Salesforce account first using the UI.
 
 For financial data, use the getFinancialData tool.
@@ -289,7 +292,8 @@ For financial data, use the getFinancialData tool.
 Always explain what you're doing and present the results in a clear, user-friendly format.`,
     messages: prompt,
     tools,
-    maxTokens: 4000
+    maxTokens: 4000,
+    maxSteps: 5 // Allow multiple tool calls and responses
   })
 
   console.log(`[v0] Streaming response to client`)
