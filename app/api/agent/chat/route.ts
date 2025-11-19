@@ -278,29 +278,18 @@ export async function POST(req: Request) {
   console.log(`[v0] Tools created and ready`)
 
   console.log(`[v0] Calling Claude Haiku 4.5 model...`)
+  
   const result = streamText({
-    model: "anthropic/claude-haiku-4.5",
+    model: "anthropic/claude-sonnet-4",
     system: `You are an AI agent that helps users access enterprise data through Okta cross-app access and Auth0 gateway.
     
 When a user asks for Salesforce data (like opportunities, accounts, leads), use the querySalesforceData tool.
-Common Salesforce objects and fields:
-- Opportunity: Id, Name, Amount, StageName, CloseDate, AccountId
-- Account: Id, Name, Industry, Type, BillingCity
-- Lead: Id, Name, Company, Email, Status
 
-CRITICAL INSTRUCTION: After you call querySalesforceData and receive data back, you MUST immediately present that data to the user in a formatted way.
-The tool will return a string with all the records. You need to output that entire string or format it nicely for the user.
-DO NOT stop after just saying "I'll retrieve..." - you must show the actual records.
-
-If a tool returns requiresConnection: true, explain that the user needs to connect their Salesforce account first using the UI.
-
-For financial data, use the getFinancialData tool.
-
-Remember: Always display the data you retrieve!`,
+CRITICAL: After the tool returns data, you MUST present it to the user. Format it nicely and show all the records returned.`,
     messages: prompt,
     tools,
     maxTokens: 4000,
-    maxSteps: 10, // Increase maxSteps to ensure LLM can generate follow-up
+    maxSteps: 10,
     onStepFinish: async ({ text, toolCalls, toolResults }) => {
       console.log(`[v0] ===== STEP FINISHED =====`)
       console.log(`[v0] Text generated in this step: "${text}"`)
