@@ -128,6 +128,12 @@ function createTools(req: Request) {
         
         console.log(`[v0] Returning formatted result to LLM`)
         
+        console.log(`[v0] ===== TOOL RESULT BEING RETURNED =====`)
+        console.log(`[v0] Result type: ${typeof resultMessage}`)
+        console.log(`[v0] Result length: ${resultMessage.length} characters`)
+        console.log(`[v0] First 200 chars: ${resultMessage.substring(0, 200)}`)
+        console.log(`[v0] ===== END TOOL RESULT =====`)
+        
         // Return a simple string that the LLM can easily present
         return resultMessage
         
@@ -282,14 +288,15 @@ Common Salesforce objects and fields:
 - Account: Id, Name, Industry, Type, BillingCity
 - Lead: Id, Name, Company, Email, Status
 
-When you receive data from the querySalesforceData tool, ALWAYS present the results to the user in a clear, formatted way.
-Display the key fields from each record and summarize what was found.
+CRITICAL: After calling querySalesforceData and receiving results, you MUST display the data to the user. 
+DO NOT just acknowledge that you'll retrieve data - actually show the records you received.
+Present the results in a clear, formatted table or list showing the key fields from each record.
 
 If a tool returns requiresConnection: true, explain that the user needs to connect their Salesforce account first using the UI.
 
 For financial data, use the getFinancialData tool.
 
-Always explain what you're doing and present the results in a clear, user-friendly format.`,
+Always show the actual data you retrieve, not just a promise to retrieve it.`,
     messages: prompt,
     tools,
     maxTokens: 4000,
