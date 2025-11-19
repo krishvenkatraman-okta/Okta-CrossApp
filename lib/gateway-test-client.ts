@@ -312,3 +312,63 @@ export async function completeConnectedAccount(authSession: string, connectCode:
   const data = await response.json()
   console.log('[v0] Connected account completed successfully:', data)
 }
+
+export async function deleteConnectedAccount(connectionId: string = 'Salesforce'): Promise<{ success: boolean, message: string }> {
+  try {
+    // Step 1: Get Web ID Token
+    const idToken = sessionStorage.getItem('web_okta_id_token')
+    if (!idToken) {
+      throw new Error('Not authenticated. Please log in with Okta Gateway first.')
+    }
+
+    // Step 2: Exchange for ME ID-JAG
+    const meJagResponse = await fetch('/api/gateway-test/me-jag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
+    })
+
+    if (!meJagResponse.ok) {
+      const error = await meJagResponse.json()
+      throw new Error(error.message)
+    }
+
+    const meJagData = await meJagResponse.json()
+
+    // Step 3: Exchange for ME Auth0 token with delete scope
+    const meDeleteTokenResponse = await fetch('/api/gateway-test/me-delete-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idJagToken: meJagData.idJagToken })
+    })
+
+    if (!meDeleteTokenResponse.ok) {
+      const error = await meDeleteTokenResponse.json()
+      throw new Error(error.message)
+    }
+
+    const meDeleteTokenData = await meDeleteTokenResponse.json()
+
+    // Step 4: Delete the connected account
+    const deleteResponse = await fetch('/api/gateway-test/delete-connected-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        meAccessToken: meDeleteTokenData.accessToken,
+        connectionId 
+      })
+    })
+
+    if (!deleteResponse.ok) {
+      const error = await deleteResponse.json()
+      throw new Error(error.message)
+    }
+
+    const deleteData = await deleteResponse.json()
+    return deleteData
+
+  } catch (error) {
+    console.error('Failed to delete connected account:', error)
+    throw error
+  }
+}

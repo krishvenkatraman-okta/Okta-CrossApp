@@ -8,8 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fetchHRData, fetchFinancialData, fetchKPIData, fetchSalesforceData, getAuthMethod } from "@/lib/resource-client"
 import type { Employee, FinancialData, KPIData, SalesforceData } from "@/lib/enterprise-data"
 import { Loader2, Users, DollarSign, TrendingUp, AlertCircle, ArrowUp, ArrowDown, Minus, Cloud } from "@/components/icons"
-import { testSalesforceGatewayFlow } from "@/lib/gateway-test-client"
-import type { GatewayTestResult } from "@/lib/gateway-test-client"
+import { testSalesforceGatewayFlow, deleteConnectedAccount } from "@/lib/gateway-test-client"
 import { tokenStore } from "@/lib/token-store"
 
 type DataState<T> = {
@@ -50,6 +49,7 @@ export function EnterpriseDashboard() {
   const [showConnectAccount, setShowConnectAccount] = useState(false)
   const [connectAccountToken, setConnectAccountToken] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     setAuthMethod(getAuthMethod())
@@ -250,6 +250,46 @@ export function EnterpriseDashboard() {
         logs: [...prev.logs, `✗ Failed to open connect window: ${error instanceof Error ? error.message : String(error)}`]
       } : null)
       setIsConnecting(false)
+    }
+  }
+
+  const handleDeleteConnectedAccount = async () => {
+    if (!confirm('Are you sure you want to delete the Salesforce connected account? This will remove the linked account and you will need to reconnect.')) {
+      return
+    }
+
+    setIsDeleting(true)
+    
+    try {
+      const result = await deleteConnectedAccount('Salesforce')
+      
+      // Update the UI to show success
+      setGatewayTestResult(prev => prev ? {
+        ...prev,
+        logs: [
+          ...prev.logs,
+          '',
+          '✓ Connected account deleted successfully!',
+          '  You will need to reconnect if you want to access Salesforce data again'
+        ]
+      } : null)
+      
+      // Reset the connect account state
+      setShowConnectAccount(false)
+      setConnectAccountToken(null)
+      
+    } catch (error) {
+      console.error('Failed to delete connected account:', error)
+      setGatewayTestResult(prev => prev ? {
+        ...prev,
+        logs: [
+          ...prev.logs,
+          '',
+          `✗ Failed to delete connected account: ${error instanceof Error ? error.message : String(error)}`
+        ]
+      } : null)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -594,22 +634,39 @@ export function EnterpriseDashboard() {
                         </div>
                         {showConnectAccount && (
                           <div className="mt-4 pt-4 border-t">
-                            <Button 
-                              onClick={handleConnectAccount}
-                              disabled={isConnecting || !connectAccountToken}
-                              className="gap-2"
-                            >
-                              {isConnecting ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Opening...
-                                </>
-                              ) : (
-                                'Connect Salesforce Account'
-                              )}
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button 
+                                onClick={handleConnectAccount}
+                                disabled={isConnecting || !connectAccountToken}
+                                className="gap-2"
+                              >
+                                {isConnecting ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Opening...
+                                  </>
+                                ) : (
+                                  'Connect Salesforce Account'
+                                )}
+                              </Button>
+                              <Button 
+                                onClick={handleDeleteConnectedAccount}
+                                disabled={isDeleting}
+                                variant="destructive"
+                                className="gap-2"
+                              >
+                                {isDeleting ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  'Delete Connected Account'
+                                )}
+                              </Button>
+                            </div>
                             <p className="text-xs mt-2 text-muted-foreground">
-                              Click to authorize Salesforce access in a popup window
+                              Connect to authorize Salesforce access or delete existing connection
                             </p>
                           </div>
                         )}
