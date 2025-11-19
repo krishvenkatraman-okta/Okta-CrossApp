@@ -229,6 +229,60 @@ export default function AgentPage() {
                                 </p>
                               )
                             }
+                            if (part.type === "tool-result" && part.result) {
+                              const result = part.result as any
+                              
+                              // If result is a string, display it directly
+                              if (typeof result === 'string') {
+                                return (
+                                  <div key={index} className="mt-2 rounded border border-border bg-background/50 p-3">
+                                    <div className="mb-1 text-xs font-semibold opacity-70">
+                                      Result from {part.toolName}:
+                                    </div>
+                                    <pre className="whitespace-pre-wrap text-sm font-mono">
+                                      {result}
+                                    </pre>
+                                  </div>
+                                )
+                              }
+                              
+                              // If result is an object, format it nicely
+                              if (result.success !== undefined) {
+                                return (
+                                  <div key={index} className="mt-2 rounded border border-border bg-background/50 p-3">
+                                    <div className="mb-1 text-xs font-semibold opacity-70">
+                                      Result from {part.toolName}:
+                                    </div>
+                                    {result.success ? (
+                                      <div className="text-sm">
+                                        {result.message && <p className="mb-2">{result.message}</p>}
+                                        {result.data && (
+                                          <pre className="whitespace-pre-wrap font-mono text-xs">
+                                            {JSON.stringify(result.data, null, 2)}
+                                          </pre>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-destructive">
+                                        {result.error || result.message || 'Operation failed'}
+                                      </p>
+                                    )}
+                                  </div>
+                                )
+                              }
+                              
+                              // Fallback: display as JSON
+                              return (
+                                <div key={index} className="mt-2 rounded border border-border bg-background/50 p-3">
+                                  <div className="mb-1 text-xs font-semibold opacity-70">
+                                    Result from {part.toolName}:
+                                  </div>
+                                  <pre className="whitespace-pre-wrap text-xs font-mono">
+                                    {JSON.stringify(result, null, 2)}
+                                  </pre>
+                                </div>
+                              )
+                            }
                             return null
                           })}
                         </div>
