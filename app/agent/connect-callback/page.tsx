@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useState } from "react"
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, CheckCircle2, XCircle } from "@/components/icons"
@@ -18,10 +18,10 @@ function ConnectCallbackContent() {
       const errorParam = searchParams.get("error")
       const sessionId = searchParams.get("session_id")
 
-      console.log('[v0] Callback received')
-      console.log('[v0]   connect_code:', connectCode)
-      console.log('[v0]   session_id:', sessionId)
-      console.log('[v0]   error:', errorParam)
+      console.log("[v0] Callback received")
+      console.log("[v0]   connect_code:", connectCode)
+      console.log("[v0]   session_id:", sessionId)
+      console.log("[v0]   error:", errorParam)
 
       if (errorParam) {
         setStatus("error")
@@ -30,104 +30,132 @@ function ConnectCallbackContent() {
       }
 
       if (connectCode) {
-        console.log('[v0] Received connect_code, completing connection')
-        
+        console.log("[v0] Received connect_code, completing connection")
+
         let authSession: string | null = null
         let meToken: string | null = null
         let codeVerifier: string | null = null
-        
+
         if (sessionId) {
-          authSession = sessionStorage.getItem(`connect_session_${sessionId}_auth_session`)
-          meToken = sessionStorage.getItem(`connect_session_${sessionId}_me_token`)
-          codeVerifier = sessionStorage.getItem(`connect_session_${sessionId}_code_verifier`)
-          console.log('[v0] Retrieved from session storage with ID:', sessionId)
-          console.log('[v0]   auth_session:', authSession ? 'found' : 'not found')
-          console.log('[v0]   me_token:', meToken ? 'found' : 'not found')
-          console.log('[v0]   code_verifier:', codeVerifier ? 'found' : 'not found')
+          const sessionKey = `ca_session_${sessionId}`
+          const sessionData = sessionStorage.getItem(sessionKey)
+          console.log("[v0] Retrieved session data with key:", sessionKey)
+
+          if (sessionData) {
+            try {
+              const parsed = JSON.parse(sessionData)
+              authSession = parsed.authSession
+              meToken = parsed.meToken
+              codeVerifier = parsed.codeVerifier
+              console.log("[v0]   auth_session:", authSession ? "found" : "not found")
+              console.log("[v0]   me_token:", meToken ? "found" : "not found")
+              console.log("[v0]   code_verifier:", codeVerifier ? "found" : "not found")
+            } catch (e) {
+              console.error("[v0] Failed to parse session data:", e)
+            }
+          } else {
+            console.log("[v0] No session data found with key:", sessionKey)
+          }
         }
-        
+
+        // Fallback to old individual keys
+        if (!authSession || !meToken || !codeVerifier) {
+          console.log("[v0] Trying old session storage format")
+          if (sessionId) {
+            authSession = authSession || sessionStorage.getItem(`connect_session_${sessionId}_auth_session`)
+            meToken = meToken || sessionStorage.getItem(`connect_session_${sessionId}_me_token`)
+            codeVerifier = codeVerifier || sessionStorage.getItem(`connect_session_${sessionId}_code_verifier`)
+          }
+        }
+
         // Fallback to original keys
-        if (!authSession) {
-          authSession = sessionStorage.getItem("pendingAuthSession")
-          console.log('[v0] Fallback: pendingAuthSession:', authSession ? 'found' : 'not found')
+        if (!authSession || !meToken || !codeVerifier) {
+          console.log("[v0] Trying legacy session storage keys")
+          authSession = authSession || sessionStorage.getItem("pendingAuthSession")
+          meToken = meToken || sessionStorage.getItem("pendingMEToken")
+          codeVerifier = codeVerifier || sessionStorage.getItem("pendingCodeVerifier")
         }
-        if (!meToken) {
-          meToken = sessionStorage.getItem("pendingMEToken")
-          console.log('[v0] Fallback: pendingMEToken:', meToken ? 'found' : 'not found')
-        }
-        if (!codeVerifier) {
-          codeVerifier = sessionStorage.getItem("pendingCodeVerifier")
-          console.log('[v0] Fallback: pendingCodeVerifier:', codeVerifier ? 'found' : 'not found')
-        }
-        
+
         // If opened as popup, notify parent and close
         if (window.opener) {
-          console.log('[v0] Popup mode detected')
-          
+          console.log("[v0] Popup mode detected")
+
           if (!authSession || !meToken || !codeVerifier) {
-            console.error('[v0] Missing required data in popup mode')
+            console.error("[v0] Missing required data in popup mode")
+            console.log("[v0] Available sessionStorage keys:", Object.keys(sessionStorage))
             setStatus("error")
             setError("Missing auth session, ME token, or code verifier. Please try again.")
             return
           }
-          
+
           try {
-            console.log('[v0] Completing connected account from popup')
+            console.log("[v0] Completing connected account from popup")
             const { completeConnectedAccount } = await import("@/lib/gateway-test-client")
             await completeConnectedAccount(authSession, connectCode, meToken, codeVerifier)
-            
-            console.log('[v0] Connection completed, notifying parent window')
-            window.opener.postMessage({
-              type: 'connected_account_complete',
-              connectCode,
-              success: true
-            }, window.location.origin)
-            
+
+            console.log("[v0] Connection completed, notifying parent window")
+            window.opener.postMessage(
+              {
+                type: "connected_account_complete",
+                connectCode,
+                success: true,
+              },
+              window.location.origin,
+            )
+
+            if (sessionId) {
+              sessionStorage.removeItem(`ca_session_${sessionId}`)
+            }
+
             setStatus("success")
             setError("Account connected successfully! Closing window...")
-            
+
             // Auto-close popup after 1 second
             setTimeout(() => {
               window.close()
             }, 1000)
           } catch (err: any) {
-            console.error('[v0] Failed to complete connection:', err)
+            console.error("[v0] Failed to complete connection:", err)
             setStatus("error")
             setError(err.message || "Failed to complete connection")
-            
+
             // Notify parent of failure
-            window.opener.postMessage({
-              type: 'connected_account_complete',
-              success: false,
-              error: err.message
-            }, window.location.origin)
+            window.opener.postMessage(
+              {
+                type: "connected_account_complete",
+                success: false,
+                error: err.message,
+              },
+              window.location.origin,
+            )
           }
-          
+
           return
         }
 
         // If not a popup, complete the connection directly
         if (!authSession || !meToken) {
-          console.error('[v0] Missing auth session or ME token')
-          console.log('[v0] Available sessionStorage keys:', Object.keys(sessionStorage))
+          console.error("[v0] Missing auth session or ME token")
+          console.log("[v0] Available sessionStorage keys:", Object.keys(sessionStorage))
           setStatus("error")
-          setError("Missing auth session or ME token")
+          setError("Missing auth session, ME token, or code verifier. Please try again.")
           return
         }
 
         if (!codeVerifier) {
-          console.error('[v0] Missing code verifier')
+          console.error("[v0] Missing code verifier")
           setStatus("error")
           setError("Missing code verifier for PKCE flow")
           return
         }
 
         try {
-          console.log('[v0] Completing connected account directly')
+          console.log("[v0] Completing connected account directly")
           const { completeConnectedAccount } = await import("@/lib/gateway-test-client")
           await completeConnectedAccount(authSession, connectCode, meToken, codeVerifier)
 
           if (sessionId) {
+            sessionStorage.removeItem(`ca_session_${sessionId}`)
             sessionStorage.removeItem(`connect_session_${sessionId}_auth_session`)
             sessionStorage.removeItem(`connect_session_${sessionId}_me_token`)
             sessionStorage.removeItem(`connect_session_${sessionId}_code_verifier`)
@@ -135,7 +163,7 @@ function ConnectCallbackContent() {
           sessionStorage.removeItem("pendingAuthSession")
           sessionStorage.removeItem("pendingMEToken")
           sessionStorage.removeItem("pendingCodeVerifier")
-          
+
           setStatus("success")
           setError("Account connected successfully! Redirecting...")
 
@@ -144,7 +172,7 @@ function ConnectCallbackContent() {
             router.push("/")
           }, 2000)
         } catch (err: any) {
-          console.error('[v0] Failed to complete connection:', err)
+          console.error("[v0] Failed to complete connection:", err)
           setStatus("error")
           setError(err.message || "Failed to complete connection")
         }
@@ -189,11 +217,13 @@ function ConnectCallbackContent() {
 
 export default function ConnectCallbackPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      }
+    >
       <ConnectCallbackContent />
     </Suspense>
   )
