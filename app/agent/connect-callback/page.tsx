@@ -22,6 +22,7 @@ function ConnectCallbackContent() {
       console.log("[v0]   connect_code:", connectCode)
       console.log("[v0]   session_id:", sessionId)
       console.log("[v0]   error:", errorParam)
+      console.log("[v0]   All sessionStorage keys:", Object.keys(sessionStorage))
 
       if (errorParam) {
         setStatus("error")
@@ -56,9 +57,33 @@ function ConnectCallbackContent() {
           } else {
             console.log("[v0] No session data found with key:", sessionKey)
           }
+        } else {
+          console.log("[v0] No session_id parameter, searching for any ca_session_* keys")
+          const allKeys = Object.keys(sessionStorage)
+          const sessionKeys = allKeys.filter((key) => key.startsWith("ca_session_"))
+          console.log("[v0] Found session keys:", sessionKeys)
+
+          if (sessionKeys.length > 0) {
+            const sessionKey = sessionKeys[sessionKeys.length - 1]
+            console.log("[v0] Using session key:", sessionKey)
+            const sessionData = sessionStorage.getItem(sessionKey)
+
+            if (sessionData) {
+              try {
+                const parsed = JSON.parse(sessionData)
+                authSession = parsed.authSession
+                meToken = parsed.meToken
+                codeVerifier = parsed.codeVerifier
+                console.log("[v0]   auth_session:", authSession ? "found" : "not found")
+                console.log("[v0]   me_token:", meToken ? "found" : "not found")
+                console.log("[v0]   code_verifier:", codeVerifier ? "found" : "not found")
+              } catch (e) {
+                console.error("[v0] Failed to parse session data:", e)
+              }
+            }
+          }
         }
 
-        // Fallback to old individual keys
         if (!authSession || !meToken || !codeVerifier) {
           console.log("[v0] Trying old session storage format")
           if (sessionId) {
@@ -68,7 +93,6 @@ function ConnectCallbackContent() {
           }
         }
 
-        // Fallback to original keys
         if (!authSession || !meToken || !codeVerifier) {
           console.log("[v0] Trying legacy session storage keys")
           authSession = authSession || sessionStorage.getItem("pendingAuthSession")
@@ -76,7 +100,6 @@ function ConnectCallbackContent() {
           codeVerifier = codeVerifier || sessionStorage.getItem("pendingCodeVerifier")
         }
 
-        // If opened as popup, notify parent and close
         if (window.opener) {
           console.log("[v0] Popup mode detected")
 
@@ -103,14 +126,13 @@ function ConnectCallbackContent() {
               window.location.origin,
             )
 
-            if (sessionId) {
-              sessionStorage.removeItem(`ca_session_${sessionId}`)
-            }
+            const allKeys = Object.keys(sessionStorage)
+            const sessionKeys = allKeys.filter((key) => key.startsWith("ca_session_"))
+            sessionKeys.forEach((key) => sessionStorage.removeItem(key))
 
             setStatus("success")
             setError("Account connected successfully! Closing window...")
 
-            // Auto-close popup after 1 second
             setTimeout(() => {
               window.close()
             }, 1000)
@@ -119,7 +141,6 @@ function ConnectCallbackContent() {
             setStatus("error")
             setError(err.message || "Failed to complete connection")
 
-            // Notify parent of failure
             window.opener.postMessage(
               {
                 type: "connected_account_complete",
@@ -133,7 +154,6 @@ function ConnectCallbackContent() {
           return
         }
 
-        // If not a popup, complete the connection directly
         if (!authSession || !meToken) {
           console.error("[v0] Missing auth session or ME token")
           console.log("[v0] Available sessionStorage keys:", Object.keys(sessionStorage))
@@ -154,20 +174,13 @@ function ConnectCallbackContent() {
           const { completeConnectedAccount } = await import("@/lib/gateway-test-client")
           await completeConnectedAccount(authSession, connectCode, meToken, codeVerifier)
 
-          if (sessionId) {
-            sessionStorage.removeItem(`ca_session_${sessionId}`)
-            sessionStorage.removeItem(`connect_session_${sessionId}_auth_session`)
-            sessionStorage.removeItem(`connect_session_${sessionId}_me_token`)
-            sessionStorage.removeItem(`connect_session_${sessionId}_code_verifier`)
-          }
-          sessionStorage.removeItem("pendingAuthSession")
-          sessionStorage.removeItem("pendingMEToken")
-          sessionStorage.removeItem("pendingCodeVerifier")
+          const allKeys = Object.keys(sessionStorage)
+          const sessionKeys = allKeys.filter((key) => key.startsWith("ca_session_"))
+          sessionKeys.forEach((key) => sessionStorage.removeItem(key))
 
           setStatus("success")
           setError("Account connected successfully! Redirecting...")
 
-          // Redirect back to main page after 2 seconds
           setTimeout(() => {
             router.push("/")
           }, 2000)
