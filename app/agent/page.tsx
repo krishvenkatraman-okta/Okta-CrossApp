@@ -120,30 +120,20 @@ export default function AgentPage() {
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("[v0] Form submitted")
-    console.log("[v0] Input value:", inputValue)
-    console.log("[v0] Is loading:", isLoading)
-    console.log("[v0] chatState.append exists:", !!chatState.append)
 
     const trimmedInput = inputValue.trim()
     if (!trimmedInput || isLoading) {
-      console.log("[v0] Form submission blocked - empty input or loading")
       return
     }
 
     try {
-      console.log("[v0] Attempting to send message:", trimmedInput)
-      // Use the append function from chatState
-      if (chatState.append) {
-        console.log("[v0] Calling chatState.append")
-        await chatState.append({
+      const { append } = chatState
+      if (append) {
+        await append({
           role: "user",
           content: trimmedInput,
         })
-        console.log("[v0] Message sent successfully")
         setInputValue("")
-      } else {
-        console.error("[v0] chatState.append is not available")
       }
     } catch (error) {
       console.error("[v0] Error sending message:", error)
