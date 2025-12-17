@@ -25,7 +25,7 @@ export default function AgentPage() {
     authSession: string
   } | null>(null)
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, append, status } = useChat({
     api: "/api/agent/chat",
   })
 
@@ -116,7 +116,7 @@ export default function AgentPage() {
     e.preventDefault()
     if (!input.trim() || status === "in_progress") return
 
-    sendMessage({ role: "user", content: input })
+    await append({ role: "user", content: input })
     setInput("")
   }
 
@@ -259,7 +259,40 @@ export default function AgentPage() {
                               : "bg-secondary text-secondary-foreground"
                           }`}
                         >
-                          {message.content && <p className="whitespace-pre-wrap">{message.content}</p>}
+                          {message.content && (
+                            <div className="prose prose-sm dark:prose-invert max-w-none">
+                              <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
+                            </div>
+                          )}
+
+                          {message.toolInvocations?.map((toolInvocation, index) => (
+                            <div key={index} className="mt-2 space-y-2">
+                              {toolInvocation.state === "result" && (
+                                <div className="rounded border bg-muted/50 p-3">
+                                  <div className="mb-1 text-xs font-semibold text-muted-foreground">
+                                    Tool: {toolInvocation.toolName}
+                                  </div>
+                                  <div className="text-sm">
+                                    {typeof toolInvocation.result === "string" ? (
+                                      <pre className="whitespace-pre-wrap font-mono text-xs">
+                                        {toolInvocation.result}
+                                      </pre>
+                                    ) : (
+                                      <pre className="whitespace-pre-wrap font-mono text-xs">
+                                        {JSON.stringify(toolInvocation.result, null, 2)}
+                                      </pre>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              {toolInvocation.state === "call" && (
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  <span>Calling {toolInvocation.toolName}...</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
