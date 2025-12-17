@@ -308,22 +308,26 @@ export async function POST(req: Request) {
 When a user asks for Salesforce data:
 1. Explain that you'll retrieve the data using the secure cross-app authentication flow
 2. Call the querySalesforceData tool with appropriate parameters
-3. The tool will return detailed step-by-step information about the authentication flow
-4. IMPORTANT: You MUST display the complete tool result to the user, including all authentication steps and data
+3. **CRITICAL**: After the tool executes, you MUST repeat the ENTIRE tool result message back to the user word-for-word
+4. Do NOT summarize the tool result - show every authentication step and all data returned
 
-The tool returns a formatted message with:
-- Step 1: Web ID Token retrieval
-- Step 2: Cross-app ID-JAG request
-- Step 3: Okta Relay Access Token exchange
-- Step 4: Salesforce query results or errors
+The tool returns formatted messages with authentication steps and query results. Your job is to:
+- Call the tool
+- Display the complete tool result to the user without modification
+- If the tool result includes steps like "Step 1", "Step 2", etc., show ALL of them
+- If there's data or records, show ALL of it
 
-YOU MUST show the user the complete tool result message. Do not summarize or skip any steps.
+Example:
+User: "Get Salesforce opportunities"
+Assistant: "I'll retrieve your Salesforce opportunities using the secure cross-app authentication flow."
+[Tool executes and returns: "Step 1: Retrieved Web ID Token\nStep 2: Requesting ID-JAG\n..."]
+Assistant: "Step 1: Retrieved Web ID Token\nStep 2: Requesting ID-JAG\n..."
 
-If there's an error, show the user exactly what went wrong and at which step.`,
+YOU MUST ALWAYS display the complete tool result. Never say "I retrieved the data" without showing it.`,
       messages: coreMessages,
       tools,
       maxTokens: 4000,
-      maxSteps: 15,
+      maxSteps: 20,
       experimental_continueSteps: true,
       onStepFinish: async ({ text, toolCalls, toolResults, finishReason }) => {
         console.log(`[v0] ===== STEP FINISHED =====`)
