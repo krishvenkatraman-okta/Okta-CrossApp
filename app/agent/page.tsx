@@ -119,13 +119,23 @@ export default function AgentPage() {
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!inputValue.trim() || isLoading) return
+    console.log("[v0] Form submitted with input:", inputValue)
 
+    if (!inputValue.trim() || isLoading) {
+      console.log("[v0] Submission blocked - empty input or loading")
+      return
+    }
+
+    console.log("[v0] Appending message to chat")
     append({
       role: "user",
       content: inputValue,
     })
     setInputValue("")
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value)
   }
 
   const handleConnectAccount = () => {
@@ -317,7 +327,7 @@ export default function AgentPage() {
                   <form onSubmit={handleFormSubmit} className="flex gap-2">
                     <Input
                       value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
+                      onChange={handleInputChange}
                       placeholder="Ask the agent to retrieve data..."
                       disabled={isLoading}
                       className="flex-1"
