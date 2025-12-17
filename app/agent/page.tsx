@@ -174,12 +174,12 @@ export default function AgentPage() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
+      const contentType = response.headers.get("content-type") || ""
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
 
       const assistantMessageId = (Date.now() + 1).toString()
       let accumulatedContent = ""
-      let assistantMessageAdded = false
 
       setMessages((prev) => [
         ...prev,
@@ -189,109 +189,101 @@ export default function AgentPage() {
           content: "",
         },
       ])
-      assistantMessageAdded = true
 
       if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
+        if (contentType.includes("text/plain")) {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
 
-          const chunk = decoder.decode(value, { stream: true })
-          console.log("[v0] Raw chunk length:", chunk.length)
-          const lines = chunk.split("\n")
+            const chunk = decoder.decode(value, { stream: true })
+            accumulatedContent += chunk
 
-          for (const line of lines) {
-            if (!line.trim()) continue
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)),
+            )
+          }
+        } else {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
 
-            if (line.startsWith("0:")) {
-              try {
-                const data = JSON.parse(line.slice(2))
+            const chunk = decoder.decode(value, { stream: true })
+            const lines = chunk.split("\n")
 
-                if (typeof data === "string") {
-                  accumulatedContent += data
+            for (const line of lines) {
+              if (!line.trim()) continue
 
-                  setMessages((prev) =>
-                    prev.map((m) => (m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)),
-                  )
-                }
-              } catch (e) {
-                console.error("[v0] Error parsing text chunk:", e)
-              }
-            } else if (line.startsWith("9:")) {
-              try {
-                const toolData = JSON.parse(line.slice(2))
-                console.log("[v0] Tool data received:", toolData.toolName)
+              if (line.startsWith("0:")) {
+                try {
+                  const data = JSON.parse(line.slice(2))
 
-                if (toolData.result) {
-                  const result = toolData.result
-                  console.log("[v0] Tool result type:", typeof result)
-                  console.log("[v0] Tool result success:", result.success)
-
-                  let toolMessage = ""
-
-                  if (typeof result === "object" && result.message) {
-                    toolMessage = "\n\n" + result.message
-
-                    if (result.tokens) {
-                      Object.entries(result.tokens).forEach(([key, value]) => {
-                        if (typeof value === "string") {
-                          console.log(`[v0] Storing token: ${key}`)
-                          tokenStore.setToken(key as any, value)
-                        }
-                      })
-                    }
-
-                    if (result.requiresConnection) {
-                      console.log("[v0] Connection required, saving retry request")
-                      setPendingRetry(content)
-                      setShowConnectAccount(true)
-                    }
-                  } else if (typeof result === "string") {
-                    toolMessage = "\n\n" + result
-                  }
-
-                  if (toolMessage) {
-                    accumulatedContent += toolMessage
+                  if (typeof data === "string") {
+                    accumulatedContent += data
 
                     setMessages((prev) =>
                       prev.map((m) => (m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)),
                     )
                   }
+                } catch (e) {
+                  console.error("[v0] Error parsing text chunk:", e)
                 }
-              } catch (e) {
-                console.error("[v0] Error parsing tool data:", e)
+              } else if (line.startsWith("9:")) {
+                try {
+                  const toolData = JSON.parse(line.slice(2))
+
+                  if (toolData.result) {
+                    const result = toolData.result
+                    let toolMessage = ""
+
+                    if (typeof result === "object" && result.message) {
+                      toolMessage = "\n\n" + result.message
+
+                      if (result.tokens) {
+                        Object.entries(result.tokens).forEach(([key, value]) => {
+                          if (typeof value === "string") {
+                            tokenStore.setToken(key as any, value)
+                          }
+                        })
+                      }
+
+                      if (result.requiresConnection) {
+                        setPendingRetry(content)
+                        setShowConnectAccount(true)
+                      }
+                    } else if (typeof result === "string") {
+                      toolMessage = "\n\n" + result
+                    }
+
+                    if (toolMessage) {
+                      accumulatedContent += toolMessage
+
+                      setMessages((prev) =>
+                        prev.map((m) => (m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)),
+                      )
+                    }
+                  }
+                } catch (e) {
+                  console.error("[v0] Error parsing tool data:", e)
+                }
               }
             }
           }
         }
       }
 
-      console.log("[v0] Stream completed")
-      console.log("[v0] Final content length:", accumulatedContent.length)
-
-      if (!accumulatedContent.trim()) {
-        console.log("[v0] No content received from stream")
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? {
-                  ...m,
-                  content:
-                    "I received your request but encountered an issue retrieving the data. Please check the console logs for details.",
-                }
-              : m,
-          ),
-        )
-      }
+      setIsLoading(false)
     } catch (error) {
       console.error("[v0] Error sending message:", error)
-      const errorMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: `Sorry, there was an error processing your request:\n\n${error instanceof Error ? error.message : "Unknown error"}\n\nPlease check the browser console for more details.`,
-      }
-      setMessages((prev) => [...prev, errorMessage])
-    } finally {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content:
+            "I received your request but encountered an issue retrieving the data. Please check the console logs for details.",
+        },
+      ])
       setIsLoading(false)
     }
   }
