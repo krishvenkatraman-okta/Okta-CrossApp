@@ -49,6 +49,11 @@ function createTools(req: Request) {
         )
         steps.push("✅ Step 3 Complete: Received Okta Relay Access Token for Gateway")
 
+        const tokenData = {
+          salesforce_id_jag_token: idJagToken,
+          salesforce_okta_relay_access_token: accessToken,
+        }
+
         const soql = `SELECT ${fields.join(", ")} FROM ${objectName}${whereClause ? ` WHERE ${whereClause}` : ""} LIMIT ${limit}`
         steps.push(`📡 Step 4: Querying Salesforce via Gateway with Okta Relay Access Token`)
         steps.push(`   Query: ${soql}`)
@@ -109,12 +114,10 @@ function createTools(req: Request) {
             return {
               success: false,
               requiresConnection: true,
-              steps,
               message: steps.join("\n"),
               error: errorData.error,
               tokens: {
-                salesforce_id_jag_token: idJagToken,
-                salesforce_okta_relay_access_token: accessToken,
+                ...tokenData,
                 me_id_jag_token: meIdJag,
                 me_auth0_access_token: meAccessToken,
               },
@@ -129,22 +132,30 @@ function createTools(req: Request) {
 
         const records = data.records || []
 
-        const formattedOutput = records
+        const formattedRecords = records
           .map((record: any, index: number) => {
             const { attributes, ...rest } = record
-            return `Record ${index + 1}: ${JSON.stringify(rest, null, 2)}`
+            const fields = Object.entries(rest)
+              .map(([key, value]) => `  ${key}: ${value}`)
+              .join("\n")
+            return `Record ${index + 1}:\n${fields}`
           })
           .join("\n\n")
 
-        const resultMessage = `${steps.join("\n")}\n\n📊 Results:\n\nFound ${records.length} ${objectName} records:\n\n${formattedOutput}`
+        const resultMessage = `${steps.join("\n")}\n\n📊 Salesforce Query Results:\n\nFound ${records.length} ${objectName} records:\n\n${formattedRecords}`
 
-        return resultMessage
+        return {
+          success: true,
+          message: resultMessage,
+          recordCount: records.length,
+          tokens: tokenData,
+        }
       } catch (error) {
         console.error(`[v0] Query error:`, error)
+        const errorMessage = `${steps.join("\n")}\n\n❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`
         return {
           success: false,
-          steps,
-          error: error instanceof Error ? error.message : "Unknown error",
+          message: errorMessage,
         }
       }
     },

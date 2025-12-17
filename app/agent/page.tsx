@@ -21,6 +21,7 @@ export default function AgentPage() {
     ticket: string
     authSession: string
   } | null>(null)
+  const [showConnectAccount, setShowConnectAccount] = useState(false)
 
   const [inputValue, setInputValue] = useState("")
 
@@ -178,6 +179,7 @@ export default function AgentPage() {
 
       const assistantMessageId = (Date.now() + 1).toString()
       let accumulatedContent = ""
+      let assistantMessageAdded = false
 
       if (reader) {
         while (true) {
@@ -190,7 +192,6 @@ export default function AgentPage() {
           for (const line of lines) {
             if (!line.trim()) continue
 
-            // AI SDK UI message stream format
             if (line.startsWith("0:")) {
               try {
                 const data = JSON.parse(line.slice(2))
@@ -199,12 +200,13 @@ export default function AgentPage() {
                 if (typeof data === "string") {
                   accumulatedContent += data
 
-                  // Update message in state
+                  // Update or add message in state
                   setMessages((prev) => {
                     const existing = prev.find((m) => m.id === assistantMessageId)
                     if (existing) {
                       return prev.map((m) => (m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m))
                     } else {
+                      assistantMessageAdded = true
                       return [
                         ...prev,
                         {
@@ -219,30 +221,78 @@ export default function AgentPage() {
               } catch (e) {
                 console.error("[v0] Error parsing stream chunk:", e)
               }
-            }
-            // Handle tool calls and results
-            else if (line.startsWith("9:")) {
+            } else if (line.startsWith("9:")) {
               try {
-                const data = JSON.parse(line.slice(2))
-                console.log("[v0] Tool data received:", data)
+                const toolData = JSON.parse(line.slice(2))
+                console.log("[v0] Tool data received:", toolData)
 
-                // Update tokens if available in tool result
-                if (data.result && typeof data.result === "object") {
-                  const result = data.result
+                // Extract tool result
+                if (toolData.result) {
+                  const result = toolData.result
 
-                  if (result.tokens) {
-                    Object.entries(result.tokens).forEach(([key, value]) => {
-                      if (typeof value === "string") {
-                        console.log(`[v0] Storing token: ${key}`)
-                        tokenStore.setToken(key as any, value)
+                  // If result has a message, append it to accumulated content
+                  if (typeof result === "object" && result.message) {
+                    const formattedMessage = "\n\n" + result.message
+                    accumulatedContent += formattedMessage
+
+                    setMessages((prev) => {
+                      const existing = prev.find((m) => m.id === assistantMessageId)
+                      if (existing) {
+                        return prev.map((m) =>
+                          m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m,
+                        )
+                      } else {
+                        assistantMessageAdded = true
+                        return [
+                          ...prev,
+                          {
+                            id: assistantMessageId,
+                            role: "assistant",
+                            content: accumulatedContent,
+                          },
+                        ]
                       }
                     })
-                  }
 
-                  // Handle connected account requirement
-                  if (result.requiresConnection) {
-                    console.log("[v0] Connection required, saving retry request")
-                    setPendingRetry(content)
+                    // Store tokens if available
+                    if (result.tokens) {
+                      Object.entries(result.tokens).forEach(([key, value]) => {
+                        if (typeof value === "string") {
+                          console.log(`[v0] Storing token: ${key}`)
+                          tokenStore.setToken(key as any, value)
+                        }
+                      })
+                    }
+
+                    // Handle connected account requirement
+                    if (result.requiresConnection) {
+                      console.log("[v0] Connection required, saving retry request")
+                      setPendingRetry(content)
+                      setShowConnectAccount(true)
+                    }
+                  } else if (typeof result === "string") {
+                    // Handle string results directly
+                    const formattedMessage = "\n\n" + result
+                    accumulatedContent += formattedMessage
+
+                    setMessages((prev) => {
+                      const existing = prev.find((m) => m.id === assistantMessageId)
+                      if (existing) {
+                        return prev.map((m) =>
+                          m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m,
+                        )
+                      } else {
+                        assistantMessageAdded = true
+                        return [
+                          ...prev,
+                          {
+                            id: assistantMessageId,
+                            role: "assistant",
+                            content: accumulatedContent,
+                          },
+                        ]
+                      }
+                    })
                   }
                 }
               } catch (e) {
@@ -254,6 +304,7 @@ export default function AgentPage() {
       }
 
       console.log("[v0] Stream completed successfully")
+      console.log("[v0] Final accumulated content length:", accumulatedContent.length)
     } catch (error) {
       console.error("[v0] Error sending message:", error)
       const errorMessage = {
@@ -508,7 +559,7 @@ export default function AgentPage() {
               </CardContent>
             </Card>
 
-            {pendingConnection && !connectedAccount && (
+            {showConnectAccount && !connectedAccount && (
               <Card className="border-orange-500">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
