@@ -25,9 +25,11 @@ export default function AgentPage() {
 
   const [inputValue, setInputValue] = useState("")
 
-  const { messages, append, isLoading } = useChat({
+  const chatState = useChat({
     api: "/api/agent/chat",
   })
+
+  const { messages, isLoading } = chatState
 
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
@@ -116,7 +118,7 @@ export default function AgentPage() {
     setAuthenticated(false)
   }
 
-  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const trimmedInput = inputValue.trim()
@@ -124,11 +126,18 @@ export default function AgentPage() {
       return
     }
 
-    append({
-      role: "user",
-      content: trimmedInput,
-    })
-    setInputValue("")
+    try {
+      // Use the append function from chatState
+      if (chatState.append) {
+        await chatState.append({
+          role: "user",
+          content: trimmedInput,
+        })
+        setInputValue("")
+      }
+    } catch (error) {
+      console.error("[v0] Error sending message:", error)
+    }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
