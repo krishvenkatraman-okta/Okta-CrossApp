@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useChat } from "@ai-sdk/react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -22,7 +24,9 @@ export default function AgentPage() {
     authSession: string
   } | null>(null)
 
-  const { messages, input, setInput, handleSubmit, isLoading } = useChat({
+  const [inputValue, setInputValue] = useState("")
+
+  const { messages, append, isLoading } = useChat({
     api: "/api/agent/chat",
   })
 
@@ -105,12 +109,23 @@ export default function AgentPage() {
   }, [messages])
 
   useEffect(() => {
-    console.log("[v0] Current input value:", input)
-  }, [input])
+    console.log("[v0] Current input value:", inputValue)
+  }, [inputValue])
 
   const handleLogout = () => {
     clearWebTokens()
     setAuthenticated(false)
+  }
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!inputValue.trim() || isLoading) return
+
+    append({
+      role: "user",
+      content: inputValue,
+    })
+    setInputValue("")
   }
 
   const handleConnectAccount = () => {
@@ -141,7 +156,6 @@ export default function AgentPage() {
           sessionStorage.removeItem(key)
         }
       })
-      console.log("[v0] Salesforce connected account deleted")
     }
   }
 
@@ -300,27 +314,16 @@ export default function AgentPage() {
                     )}
                   </div>
 
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      if (!input?.trim() || isLoading) return
-                      console.log("[v0] Form submitted with input:", input)
-                      handleSubmit(e)
-                    }}
-                    className="flex gap-2"
-                  >
+                  <form onSubmit={handleFormSubmit} className="flex gap-2">
                     <Input
-                      value={input}
-                      onChange={(e) => {
-                        console.log("[v0] Input changed:", e.target.value)
-                        setInput(e.target.value)
-                      }}
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
                       placeholder="Ask the agent to retrieve data..."
                       disabled={isLoading}
                       className="flex-1"
                       autoComplete="off"
                     />
-                    <Button type="submit" disabled={isLoading || !input?.trim()}>
+                    <Button type="submit" disabled={isLoading || !inputValue.trim()}>
                       {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </Button>
                   </form>

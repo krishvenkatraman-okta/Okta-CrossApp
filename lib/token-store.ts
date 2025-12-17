@@ -1,12 +1,12 @@
 "use client"
 
 // Token storage and event system for displaying tokens in the UI
-type TokenType = 
-  | "id_token" 
-  | "access_token" 
-  | "id_jag_token" 
-  | "auth0_access_token" 
-  | "web_id_token" 
+type TokenType =
+  | "id_token"
+  | "access_token"
+  | "id_jag_token"
+  | "auth0_access_token"
+  | "web_id_token"
   | "web_access_token"
   | "finance_id_jag_token"
   | "finance_auth0_access_token"
@@ -28,6 +28,39 @@ type TokenListener = (tokens: Map<TokenType, TokenInfo>) => void
 class TokenStore {
   private tokens = new Map<TokenType, TokenInfo>()
   private listeners = new Set<TokenListener>()
+  private storageKey = "okta_tokens"
+
+  constructor() {
+    if (typeof window !== "undefined") {
+      this.loadFromStorage()
+    }
+  }
+
+  private loadFromStorage() {
+    try {
+      const stored = localStorage.getItem(this.storageKey)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        Object.entries(parsed).forEach(([type, info]) => {
+          this.tokens.set(type as TokenType, info as TokenInfo)
+        })
+      }
+    } catch (error) {
+      console.error("Failed to load tokens from storage:", error)
+    }
+  }
+
+  private saveToStorage() {
+    try {
+      const obj: Record<string, TokenInfo> = {}
+      this.tokens.forEach((value, key) => {
+        obj[key] = value
+      })
+      localStorage.setItem(this.storageKey, JSON.stringify(obj))
+    } catch (error) {
+      console.error("Failed to save tokens to storage:", error)
+    }
+  }
 
   setToken(type: TokenType, token: string) {
     const decoded = this.decodeJWT(token)
@@ -37,6 +70,7 @@ class TokenStore {
       timestamp: Date.now(),
       decoded,
     })
+    this.saveToStorage()
     this.notifyListeners()
   }
 
@@ -82,6 +116,9 @@ class TokenStore {
 
   clearTokens() {
     this.tokens.clear()
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(this.storageKey)
+    }
     this.notifyListeners()
   }
 
