@@ -25,11 +25,9 @@ export default function AgentPage() {
 
   const [inputValue, setInputValue] = useState("")
 
-  const chatState = useChat({
+  const { messages, isLoading, append } = useChat({
     api: "/api/agent/chat",
   })
-
-  const { messages, isLoading } = chatState
 
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
@@ -127,7 +125,6 @@ export default function AgentPage() {
     }
 
     try {
-      const { append } = chatState
       if (append) {
         await append({
           role: "user",
