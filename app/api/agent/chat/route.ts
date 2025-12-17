@@ -1,277 +1,99 @@
-import { streamText, tool, type UIMessage } from "ai"
-import { z } from "zod"
+import { streamText, type CoreMessage } from "ai"
 import { getIdTokenFromCookies, requestIdJag, exchangeIdJagForAuth0Token } from "@/lib/server-token-exchange"
 
 export const maxDuration = 30
 
-function createTools(req: Request) {
-  const querySalesforceData = tool({
-    description:
-      "Query Salesforce data using SOQL via the Auth0 gateway. You can query objects like Opportunity, Account, Lead, etc. The tool handles the complete token exchange and gateway routing automatically.",
-    inputSchema: z.object({
-      objectName: z.string().describe("Salesforce object name (e.g., 'Opportunity', 'Account', 'Lead')"),
-      fields: z.array(z.string()).describe("Fields to retrieve (e.g., ['Id', 'Name', 'Amount', 'StageName'])"),
-      whereClause: z.string().optional().describe("Optional WHERE clause (e.g., 'StageName = \\'Closed Won\\'')"),
-      limit: z.number().default(10).describe("Maximum number of records to return"),
-    }),
-    execute: async ({ objectName, fields, whereClause, limit }): Promise<string> => {
-      const steps: string[] = []
-      let finalResult: string
+async function querySalesforceData(
+  req: Request,
+  objectName: string,
+  fields: string[],
+  whereClause?: string,
+  limit = 10,
+): Promise<string> {
+  const steps: string[] = []
 
-      steps.push("🔐 Step 1: Retrieved Web ID Token from your authenticated session")
+  steps.push("🔐 Step 1: Retrieved Web ID Token from your authenticated session")
 
-      try {
-        const idToken = getIdTokenFromCookies(req)
-        if (!idToken) {
-          throw new Error("Not authenticated")
-        }
+  try {
+    const idToken = getIdTokenFromCookies(req)
+    if (!idToken) {
+      throw new Error("Not authenticated")
+    }
 
-        const salesforceDomain = process.env.SALESFORCE_DOMAIN
-        const auth0Audience = process.env.AUTH0_AUDIENCE
-        const gatewayUrl = process.env.GATEWAY_URL
+    const salesforceDomain = process.env.SALESFORCE_DOMAIN
+    const auth0Audience = process.env.AUTH0_AUDIENCE
+    const gatewayUrl = process.env.GATEWAY_URL
 
-        if (!salesforceDomain || !auth0Audience || !gatewayUrl) {
-          throw new Error("SALESFORCE_DOMAIN, AUTH0_AUDIENCE, or GATEWAY_URL not configured")
-        }
+    if (!salesforceDomain || !auth0Audience || !gatewayUrl) {
+      throw new Error("SALESFORCE_DOMAIN, AUTH0_AUDIENCE, or GATEWAY_URL not configured")
+    }
 
-        steps.push("🔄 Step 2: Requesting cross-app ID-JAG for Gateway with resource: Salesforce")
-        const idJagToken = await requestIdJag(idToken, salesforceDomain, auth0Audience)
-        steps.push("✅ Step 2 Complete: Received ID-JAG for Gateway from Okta")
+    steps.push("🔄 Step 2: Requesting cross-app ID-JAG for Gateway with resource: Salesforce")
+    const idJagToken = await requestIdJag(idToken, salesforceDomain, auth0Audience)
+    steps.push("✅ Step 2 Complete: Received ID-JAG for Gateway from Okta")
 
-        steps.push("🎫 Step 3: Trading ID-JAG for Okta Relay Access Token")
-        const scope = process.env.SALESFORCE_SCOPE || "salesforce:read"
-        const accessToken = await exchangeIdJagForAuth0Token(
-          idJagToken,
-          process.env.AUTH0_TOKEN_ENDPOINT!,
-          process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
-          process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
-          scope,
-          salesforceDomain,
-        )
-        steps.push("✅ Step 3 Complete: Received Okta Relay Access Token for Gateway")
+    steps.push("🎫 Step 3: Trading ID-JAG for Okta Relay Access Token")
+    const scope = process.env.SALESFORCE_SCOPE || "salesforce:read"
+    const accessToken = await exchangeIdJagForAuth0Token(
+      idJagToken,
+      process.env.AUTH0_TOKEN_ENDPOINT!,
+      process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
+      process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
+      scope,
+      salesforceDomain,
+    )
+    steps.push("✅ Step 3 Complete: Received Okta Relay Access Token for Gateway")
 
-        const tokenData = {
-          salesforce_id_jag_token: idJagToken,
-          salesforce_okta_relay_access_token: accessToken,
-        }
+    const soql = `SELECT ${fields.join(", ")} FROM ${objectName}${whereClause ? ` WHERE ${whereClause}` : ""} LIMIT ${limit}`
+    steps.push(`📡 Step 4: Querying Salesforce via Gateway with Okta Relay Access Token`)
+    steps.push(`   Query: ${soql}`)
 
-        const soql = `SELECT ${fields.join(", ")} FROM ${objectName}${whereClause ? ` WHERE ${whereClause}` : ""} LIMIT ${limit}`
-        steps.push(`📡 Step 4: Querying Salesforce via Gateway with Okta Relay Access Token`)
-        steps.push(`   Query: ${soql}`)
+    const encodedQuery = encodeURIComponent(soql)
+    const salesforceEndpoint = `/services/data/v62.0/query?q=${encodedQuery}`
+    const fullUrl = `${gatewayUrl}${salesforceEndpoint}`
+    const hostname = salesforceDomain.replace(/^https?:\/\//, "")
 
-        const encodedQuery = encodeURIComponent(soql)
-        const salesforceEndpoint = `/services/data/v62.0/query?q=${encodedQuery}`
-        const fullUrl = `${gatewayUrl}${salesforceEndpoint}`
-        const hostname = salesforceDomain.replace(/^https?:\/\//, "")
+    const response = await fetch(fullUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "X-GATEWAY-Host": hostname,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    })
 
-        console.log("[v0] Calling gateway with proper URL construction")
-        console.log(`[v0]   Gateway URL: ${gatewayUrl}`)
-        console.log(`[v0]   Salesforce Endpoint: ${salesforceEndpoint}`)
-        console.log(`[v0]   Full URL: ${fullUrl}`)
-        console.log(`[v0]   X-GATEWAY-Host: ${hostname}`)
+    if (!response.ok) {
+      const errorText = await response.text()
+      const contentType = response.headers.get("content-type") || ""
 
-        const response = await fetch(fullUrl, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "X-GATEWAY-Host": hostname,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-        })
-
-        console.log(`[v0] Gateway response status: ${response.status}`)
-        const contentType = response.headers.get("content-type") || ""
-        console.log(`[v0] Gateway response content-type: ${contentType}`)
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.log(`[v0] Gateway error response:`, errorText.substring(0, 500))
-
-          if (contentType.includes("text/html")) {
-            steps.push("❌ Step 4 Error: Gateway returned HTML error page instead of JSON")
-            steps.push(`   Status: ${response.status}`)
-            steps.push(`   This usually means the gateway URL or configuration is incorrect`)
-
-            finalResult = `${steps.join("\n")}\n\n❌ Error: Gateway returned HTML (status ${response.status}). Check GATEWAY_URL configuration.`
-            return finalResult
-          }
-
-          let errorData
-          try {
-            errorData = JSON.parse(errorText)
-          } catch {
-            errorData = { raw: errorText }
-          }
-
-          if (errorData.error === "federated_connection_refresh_token_not_found") {
-            steps.push("⚠️ Step 4 Error: Federation account not found in token vault")
-            steps.push("💡 Solution: We need to initiate a Connected Account flow to store your Salesforce credentials")
-            steps.push("🔄 Initiating Connected Account setup with ME token...")
-
-            const meIdJag = await requestIdJag(idToken, `${process.env.AUTH0_DOMAIN}/me/`, auth0Audience)
-            const meAccessToken = await exchangeIdJagForAuth0Token(
-              meIdJag,
-              process.env.AUTH0_TOKEN_ENDPOINT!,
-              process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
-              process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
-              "create:me:connected_accounts",
-              `${process.env.AUTH0_DOMAIN}/me/`,
-            )
-
-            steps.push("✅ ME Access Token obtained - Ready to create Connected Account")
-            steps.push("👉 Please authorize the Connected Account in the popup window")
-            steps.push("🔁 After authorization, your request will automatically retry")
-
-            finalResult = `${steps.join("\n")}\n\nRequires connection: true\n\nError: ${errorData.error}`
-            return finalResult
-          }
-
-          throw new Error(`Gateway request failed: ${response.status} - ${JSON.stringify(errorData)}`)
-        }
-
-        if (!contentType.includes("application/json")) {
-          const responseText = await response.text()
-          console.log(`[v0] Gateway returned non-JSON response:`, responseText.substring(0, 500))
-
-          steps.push("❌ Step 4 Error: Gateway returned non-JSON response")
-          steps.push(`   Content-Type: ${contentType}`)
-          steps.push(`   This indicates a gateway configuration or routing issue`)
-
-          finalResult = `${steps.join("\n")}\n\n❌ Error: Gateway returned ${contentType} instead of JSON. Response preview: ${responseText.substring(0, 200)}`
-          return finalResult
-        }
-
-        const data = await response.json()
-        steps.push(`✅ Step 4 Complete: Retrieved ${data.records?.length || 0} records from Salesforce`)
-
-        const records = data.records || []
-
-        const formattedRecords = records
-          .map((record: any, index: number) => {
-            const { attributes, ...rest } = record
-            const fields = Object.entries(rest)
-              .map(([key, value]) => `  ${key}: ${value}`)
-              .join("\n")
-            return `Record ${index + 1}:\n${fields}`
-          })
-          .join("\n\n")
-
-        const resultMessage = `${steps.join("\n")}\n\n📊 Salesforce Query Results:\n\nFound ${records.length} ${objectName} records:\n\n${formattedRecords}`
-
-        console.log(`[v0] Tool result message length: ${resultMessage.length}`)
-        console.log(`[v0] Tool result preview:`, resultMessage.substring(0, 300))
-        console.log(`[v0] Returning result message`)
-
-        finalResult = resultMessage
-      } catch (error) {
-        console.error(`[v0] Query error:`, error)
-        const errorMessage = `${steps.join("\n")}\n\n❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`
-        console.log(`[v0] Returning error message:`, errorMessage.substring(0, 200))
-
-        finalResult = errorMessage
+      if (contentType.includes("text/html")) {
+        steps.push("❌ Step 4 Error: Gateway returned HTML error page instead of JSON")
+        return `${steps.join("\n")}\n\n❌ Error: Gateway configuration issue`
       }
 
-      console.log(`[v0] Returning final result, length: ${finalResult.length}`)
-      return finalResult
-    },
-  })
+      steps.push(`❌ Step 4 Error: Gateway returned status ${response.status}`)
+      return `${steps.join("\n")}\n\n❌ Error: ${errorText}`
+    }
 
-  const connectSalesforceAccount = tool({
-    description:
-      "Initiate the connected account flow for Salesforce when federated_connection_refresh_token_not_found error occurs",
-    inputSchema: z.object({
-      meAccessToken: z.string().describe("The ME Auth0 access token from previous tool result"),
-    }),
-    execute: async ({ meAccessToken }) => {
-      console.log(`[v0] ===== CONNECTED ACCOUNT FLOW STARTED =====`)
+    const data = await response.json()
+    steps.push(`✅ Step 4 Complete: Retrieved ${data.records?.length || 0} records from Salesforce`)
 
-      try {
-        const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000"
-        const response = await fetch(`${baseUrl}/api/gateway-test/connect-account`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ meAccessToken }),
-        })
+    const records = data.records || []
+    const formattedRecords = records
+      .map((record: any, index: number) => {
+        const { attributes, ...rest } = record
+        const fields = Object.entries(rest)
+          .map(([key, value]) => `  ${key}: ${value}`)
+          .join("\n")
+        return `Record ${index + 1}:\n${fields}`
+      })
+      .join("\n\n")
 
-        if (!response.ok) {
-          throw new Error(`Failed to create connect account ticket: ${response.status}`)
-        }
-
-        const data = await response.json()
-        console.log(`[v0] Connect account ticket created`)
-
-        return `Connected account flow initiated. User needs to authorize in popup window.\n\nConnect URI: ${data.connectUri}\nAuthorization URL: ${data.authorizationUrl}\nTicket: ${data.ticket}\nAuth Session: ${data.authSession}\nSession ID: ${data.sessionId}`
-      } catch (error) {
-        console.error(`[v0] Connect account error:`, error)
-        return `Error: ${error instanceof Error ? error.message : "Unknown error"}`
-      }
-    },
-  })
-
-  const getFinancialDataTool = tool({
-    description: "Get financial data such as revenue, expenses, or profit information",
-    inputSchema: z.object({
-      dataType: z.enum(["revenue", "expenses", "profit", "all"]).describe("Type of financial data to retrieve"),
-    }),
-    execute: async ({ dataType }) => {
-      console.log(`[v0] ===== FINANCIAL DATA REQUEST STARTED =====`)
-      console.log(`[v0] Step 1: Agent requesting financial ${dataType}`)
-
-      try {
-        const idToken = getIdTokenFromCookies(req)
-        if (!idToken) {
-          throw new Error("Not authenticated. Please log in with Okta Gateway first.")
-        }
-        console.log(`[v0] Step 2 ✓: ID token found, length: ${idToken.length}`)
-
-        const { idJag, accessToken } = await exchangeForAuth0Token(idToken)
-        console.log(`[v0] Step 3 ✓: Financial Auth0 token obtained`)
-        console.log(`[v0] - ID-JAG length: ${idJag.length}`)
-        console.log(`[v0] - Access Token length: ${accessToken.length}`)
-
-        const tokenData = {
-          finance_id_jag_token: idJag,
-          finance_auth0_access_token: accessToken,
-        }
-
-        const apiUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/resource/financial`
-        console.log(`[v0] Step 4: Making financial API request`)
-        console.log(`[v0] - API URL: ${apiUrl}`)
-
-        const response = await fetch(apiUrl, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        })
-
-        console.log(`[v0] Step 4 ✓: Financial API response received - Status: ${response.status}`)
-
-        if (!response.ok) {
-          throw new Error(`Financial API request failed: ${response.status}`)
-        }
-
-        const data = await response.json()
-        console.log(`[v0] Step 5 ✓: Financial data parsed successfully`)
-        console.log(`[v0] ===== FINANCIAL DATA REQUEST COMPLETED =====`)
-
-        return `Successfully retrieved ${dataType} financial data\n\n${JSON.stringify(data)}`
-      } catch (error) {
-        console.error(`[v0] ===== FINANCIAL DATA REQUEST FAILED =====`)
-        console.error(`[v0] Error in getFinancialData tool:`, error)
-        if (error instanceof Error) {
-          console.error(`[v0] Error message: ${error.message}`)
-          console.error(`[v0] Error stack: ${error.stack}`)
-        }
-        return `Failed to retrieve financial ${dataType}\n\nError: ${error instanceof Error ? error.message : "Unknown error"}`
-      }
-    },
-  })
-
-  return {
-    querySalesforceData,
-    connectSalesforceAccount,
-    getFinancialData: getFinancialDataTool,
+    return `${steps.join("\n")}\n\n📊 Salesforce Query Results:\n\nFound ${records.length} ${objectName} records:\n\n${formattedRecords}`
+  } catch (error) {
+    console.error(`[v0] Query error:`, error)
+    return `${steps.join("\n")}\n\n❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`
   }
 }
 
@@ -280,108 +102,60 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json()
-    console.log(`[v0] Request body:`, body)
-
-    const messages: UIMessage[] = body?.messages || []
+    const messages = body?.messages || []
 
     if (!messages || messages.length === 0) {
-      throw new Error("No messages provided in request")
+      throw new Error("No messages provided")
     }
 
-    console.log(`[v0] Message count: ${messages.length}`)
-    console.log(`[v0] Latest message:`, messages[messages.length - 1])
+    const lastMessage = messages[messages.length - 1]
+    const userMessage = lastMessage.content.toLowerCase()
 
-    const coreMessages = messages.map((msg) => ({
+    if (userMessage.includes("salesforce") && userMessage.includes("opportunit")) {
+      console.log(`[v0] Detected Salesforce opportunity query - executing directly`)
+
+      const result = await querySalesforceData(
+        req,
+        "Opportunity",
+        ["Id", "Name", "Amount", "StageName", "CloseDate", "AccountId"],
+        undefined,
+        10,
+      )
+
+      console.log(`[v0] Query result length: ${result.length}`)
+      console.log(`[v0] Query result preview:`, result.substring(0, 300))
+
+      // Return simple text stream
+      return new Response(result, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+      })
+    }
+
+    const coreMessages: CoreMessage[] = messages.map((msg: any) => ({
       role: msg.role as "user" | "assistant",
       content: msg.content || "",
     }))
 
-    const tools = createTools(req)
-
-    console.log(`[v0] Tools created and ready`)
-    console.log(`[v0] Calling Claude Sonnet 4 model...`)
-
     const result = await streamText({
       model: "anthropic/claude-sonnet-4",
-      system: `You are an AI agent that helps users access enterprise data through Okta cross-app access and the Okta Relay Gateway.
+      system: `You are an AI agent that helps users access enterprise data through Okta cross-app access.
 
-When a user asks for Salesforce data:
-1. Explain that you'll retrieve the data using the secure cross-app authentication flow
-2. Call the querySalesforceData tool with appropriate parameters
-3. **CRITICAL**: After the tool executes, you MUST repeat the ENTIRE tool result message back to the user word-for-word
-4. Do NOT summarize the tool result - show every authentication step and all data returned
+When users ask for Salesforce opportunities, the system will automatically fetch and display them with all authentication steps.
 
-The tool returns formatted messages with authentication steps and query results. Your job is to:
-- Call the tool
-- Display the complete tool result to the user without modification
-- If the tool result includes steps like "Step 1", "Step 2", etc., show ALL of them
-- If there's data or records, show ALL of it
-
-Example:
-User: "Get Salesforce opportunities"
-Assistant: "I'll retrieve your Salesforce opportunities using the secure cross-app authentication flow."
-[Tool executes and returns: "Step 1: Retrieved Web ID Token\nStep 2: Requesting ID-JAG\n..."]
-Assistant: "Step 1: Retrieved Web ID Token\nStep 2: Requesting ID-JAG\n..."
-
-YOU MUST ALWAYS display the complete tool result. Never say "I retrieved the data" without showing it.`,
+For other requests, provide helpful guidance.`,
       messages: coreMessages,
-      tools,
-      maxTokens: 4000,
-      maxSteps: 20,
-      experimental_continueSteps: true,
-      onStepFinish: async ({ text, toolCalls, toolResults, finishReason }) => {
-        console.log(`[v0] ===== STEP FINISHED =====`)
-        console.log(`[v0] Finish reason: ${finishReason}`)
-        console.log(`[v0] Text generated: "${text}"`)
-        console.log(`[v0] Tool calls count: ${toolCalls?.length || 0}`)
-        console.log(`[v0] Tool results count: ${toolResults?.length || 0}`)
-
-        if (toolCalls && toolCalls.length > 0) {
-          toolCalls.forEach((call, index) => {
-            console.log(`[v0] Tool call ${index + 1}: ${call.toolName}`)
-          })
-        }
-
-        if (toolResults && toolResults.length > 0) {
-          toolResults.forEach((result, index) => {
-            console.log(`[v0] Tool ${index + 1} result type:`, typeof result.result)
-            if (result.result !== undefined && result.result !== null) {
-              const resultStr = String(result.result)
-              console.log(`[v0] Tool ${index + 1} result length:`, resultStr.length)
-              console.log(`[v0] Tool ${index + 1} result preview:`, resultStr.substring(0, 300))
-            } else {
-              console.log(`[v0] Tool ${index + 1} result is undefined or null!`)
-            }
-          })
-        }
-      },
+      maxTokens: 2000,
     })
 
-    console.log(`[v0] Streaming response to client`)
-
-    return result.toUIMessageStreamResponse()
+    return result.toTextStreamResponse()
   } catch (error) {
-    console.error(`[v0] ===== AGENT CHAT ERROR =====`)
     console.error(`[v0] Error:`, error)
-    console.error(`[v0] Error stack:`, error instanceof Error ? error.stack : "No stack trace")
 
-    return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error occurred",
-        details: error instanceof Error ? error.stack : undefined,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    )
-  }
-}
-
-async function exchangeForAuth0Token(idToken: string) {
-  // Placeholder function to simulate token exchange
-  return {
-    idJag: "simulated_id_jag_token",
-    accessToken: "simulated_access_token",
+    return new Response(`Error: ${error instanceof Error ? error.message : "Unknown error occurred"}`, {
+      status: 500,
+      headers: { "Content-Type": "text/plain" },
+    })
   }
 }
