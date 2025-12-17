@@ -27,9 +27,10 @@ function createTools(req: Request) {
 
         const salesforceDomain = process.env.SALESFORCE_DOMAIN
         const auth0Audience = process.env.AUTH0_AUDIENCE
+        const gatewayUrl = process.env.GATEWAY_URL
 
-        if (!salesforceDomain || !auth0Audience) {
-          throw new Error("SALESFORCE_DOMAIN or AUTH0_AUDIENCE not configured")
+        if (!salesforceDomain || !auth0Audience || !gatewayUrl) {
+          throw new Error("SALESFORCE_DOMAIN, AUTH0_AUDIENCE, or GATEWAY_URL not configured")
         }
 
         steps.push("🔄 Step 2: Requesting cross-app ID-JAG for Gateway with resource: Salesforce")
@@ -52,33 +53,39 @@ function createTools(req: Request) {
         steps.push(`📡 Step 4: Querying Salesforce via Gateway with Okta Relay Access Token`)
         steps.push(`   Query: ${soql}`)
 
-        const gatewayUrl = process.env.GATEWAY_URL
-        if (!gatewayUrl) {
-          throw new Error("GATEWAY_URL not configured")
-        }
-
         const encodedQuery = encodeURIComponent(soql)
-        const endpoint = `/services/data/v62.0/query?q=${encodedQuery}`
-        const fullUrl = `${gatewayUrl}${endpoint}`
+        const salesforceEndpoint = `/services/data/v62.0/query?q=${encodedQuery}`
+        const fullUrl = `${gatewayUrl}${salesforceEndpoint}`
         const hostname = salesforceDomain.replace(/^https?:\/\//, "")
 
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/gateway-test/salesforce-data`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              accessToken,
-              gatewayUrl: fullUrl,
-              hostname,
-            }),
+        console.log("[v0] Calling gateway with proper URL construction")
+        console.log(`[v0]   Gateway URL: ${gatewayUrl}`)
+        console.log(`[v0]   Salesforce Endpoint: ${salesforceEndpoint}`)
+        console.log(`[v0]   Full URL: ${fullUrl}`)
+        console.log(`[v0]   X-GATEWAY-Host: ${hostname}`)
+
+        const response = await fetch(fullUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "X-GATEWAY-Host": hostname,
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
-        )
+        })
+
+        console.log(`[v0] Gateway response status: ${response.status}`)
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
+          const errorText = await response.text()
+          console.log(`[v0] Gateway error response:`, errorText)
+
+          let errorData
+          try {
+            errorData = JSON.parse(errorText)
+          } catch {
+            errorData = { raw: errorText }
+          }
 
           if (errorData.error === "federated_connection_refresh_token_not_found") {
             steps.push("⚠️ Step 4 Error: Federation account not found in token vault")
