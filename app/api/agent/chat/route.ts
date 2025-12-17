@@ -266,7 +266,15 @@ export async function POST(req: Request) {
   console.log(`[v0] ===== AGENT CHAT REQUEST RECEIVED =====`)
 
   try {
-    const { messages }: { messages: UIMessage[] } = await req.json()
+    const body = await req.json()
+    console.log(`[v0] Request body:`, body)
+
+    const messages: UIMessage[] = body?.messages || []
+
+    if (!messages || messages.length === 0) {
+      throw new Error("No messages provided in request")
+    }
+
     console.log(`[v0] Message count: ${messages.length}`)
     console.log(`[v0] Latest message:`, messages[messages.length - 1])
 
