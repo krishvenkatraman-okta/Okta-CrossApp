@@ -104,6 +104,10 @@ export default function AgentPage() {
     })
   }, [messages])
 
+  useEffect(() => {
+    console.log("[v0] Current input value:", input)
+  }, [input])
+
   const handleLogout = () => {
     clearWebTokens()
     setAuthenticated(false)
@@ -296,13 +300,23 @@ export default function AgentPage() {
                     )}
                   </div>
 
-                  <form onSubmit={handleSubmit} className="flex gap-2">
+                  <form
+                    onSubmit={(e) => {
+                      console.log("[v0] Form submitted with input:", input)
+                      handleSubmit(e)
+                    }}
+                    className="flex gap-2"
+                  >
                     <Input
                       value={input}
-                      onChange={handleInputChange}
+                      onChange={(e) => {
+                        console.log("[v0] Input changed:", e.target.value)
+                        handleInputChange(e)
+                      }}
                       placeholder="Ask the agent to retrieve data..."
                       disabled={isLoading}
                       className="flex-1"
+                      autoComplete="off"
                     />
                     <Button type="submit" disabled={isLoading || !input?.trim()}>
                       {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
