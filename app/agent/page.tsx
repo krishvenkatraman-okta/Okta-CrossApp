@@ -122,7 +122,7 @@ export default function AgentPage() {
     e.preventDefault()
 
     const trimmedInput = inputValue.trim()
-    if (!trimmedInput || isLoading || !append) {
+    if (!trimmedInput || isLoading) {
       return
     }
 
@@ -175,7 +175,7 @@ export default function AgentPage() {
   const examplePrompts = ["Get Salesforce opportunities", "Show me financial data", "What are the latest sales leads?"]
 
   const handlePromptClick = async (prompt: string) => {
-    if (isLoading || !append) return
+    if (isLoading) return
 
     setInputValue(prompt)
     try {
