@@ -2,7 +2,6 @@
 
 import type React from "react"
 
-import { useChat } from "@ai-sdk/react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,12 +24,8 @@ export default function AgentPage() {
 
   const [inputValue, setInputValue] = useState("")
 
-  const chatHook = useChat({
-    api: "/api/agent/chat",
-  })
-
-  const { messages, isLoading, setMessages } = chatHook
-  const appendMessage = chatHook.append
+  const [messages, setMessages] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
@@ -119,6 +114,80 @@ export default function AgentPage() {
     setAuthenticated(false)
   }
 
+  const sendMessage = async (content: string) => {
+    if (isLoading) return
+
+    const userMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content,
+    }
+
+    setMessages((prev) => [...prev, userMessage])
+    setIsLoading(true)
+
+    try {
+      const response = await fetch("/api/agent/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMessage],
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      const assistantMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "",
+        toolInvocations: [],
+      }
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value)
+          const lines = chunk.split("\n").filter((line) => line.trim() !== "")
+
+          for (const line of lines) {
+            if (line.startsWith("0:")) {
+              const jsonStr = line.slice(2)
+              try {
+                const data = JSON.parse(jsonStr)
+                if (typeof data === "string") {
+                  assistantMessage.content += data
+                }
+              } catch (e) {
+                console.error("[v0] Error parsing stream data:", e)
+              }
+            }
+          }
+        }
+      }
+
+      setMessages((prev) => [...prev, assistantMessage])
+    } catch (error) {
+      console.error("[v0] Error sending message:", error)
+      const errorMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Sorry, there was an error processing your request.",
+      }
+      setMessages((prev) => [...prev, errorMessage])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -127,19 +196,8 @@ export default function AgentPage() {
       return
     }
 
-    try {
-      if (appendMessage && typeof appendMessage === "function") {
-        await appendMessage({
-          role: "user",
-          content: trimmedInput,
-        })
-        setInputValue("")
-      } else {
-        console.error("[v0] append function not available")
-      }
-    } catch (error) {
-      console.error("[v0] Error sending message:", error)
-    }
+    await sendMessage(trimmedInput)
+    setInputValue("")
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -181,21 +239,8 @@ export default function AgentPage() {
 
   const handlePromptClick = async (prompt: string) => {
     if (isLoading) return
-    setInputValue(prompt)
 
-    try {
-      if (appendMessage && typeof appendMessage === "function") {
-        await appendMessage({
-          role: "user",
-          content: prompt,
-        })
-        setInputValue("")
-      } else {
-        console.error("[v0] append function not available")
-      }
-    } catch (error) {
-      console.error("[v0] Error sending prompt:", error)
-    }
+    await sendMessage(prompt)
   }
 
   if (loading) {
