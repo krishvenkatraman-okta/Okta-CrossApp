@@ -25,11 +25,9 @@ export default function AgentPage() {
 
   const [inputValue, setInputValue] = useState("")
 
-  const chatState = useChat({
+  const { messages, isLoading, append, setMessages } = useChat({
     api: "/api/agent/chat",
   })
-
-  const { messages, isLoading, append } = chatState
 
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
@@ -118,7 +116,7 @@ export default function AgentPage() {
     setAuthenticated(false)
   }
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
     const trimmedInput = inputValue.trim()
@@ -126,15 +124,17 @@ export default function AgentPage() {
       return
     }
 
-    try {
-      await append({
-        role: "user",
-        content: trimmedInput,
+    // Append the message
+    append({
+      role: "user",
+      content: trimmedInput,
+    })
+      .then(() => {
+        setInputValue("")
       })
-      setInputValue("")
-    } catch (error) {
-      console.error("Error sending message:", error)
-    }
+      .catch((error) => {
+        console.error("[v0] Error sending message:", error)
+      })
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,19 +174,21 @@ export default function AgentPage() {
 
   const examplePrompts = ["Get Salesforce opportunities", "Show me financial data", "What are the latest sales leads?"]
 
-  const handlePromptClick = async (prompt: string) => {
+  const handlePromptClick = (prompt: string) => {
     if (isLoading) return
-
     setInputValue(prompt)
-    try {
-      await append({
-        role: "user",
-        content: prompt,
+
+    // Immediately append the message
+    append({
+      role: "user",
+      content: prompt,
+    })
+      .then(() => {
+        setInputValue("")
       })
-      setInputValue("")
-    } catch (error) {
-      console.error("Error sending message:", error)
-    }
+      .catch((error) => {
+        console.error("[v0] Error sending prompt:", error)
+      })
   }
 
   if (loading) {
