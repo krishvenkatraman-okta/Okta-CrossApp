@@ -6,7 +6,6 @@ import { useChat } from "@ai-sdk/react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Shield, Send, Loader2, XCircle } from "@/components/icons"
 import { isWebAuthenticated, clearWebTokens } from "@/lib/web-auth-client"
 import { LoginButton } from "@/components/login-button"
@@ -120,13 +119,14 @@ export default function AgentPage() {
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
-    if (!inputValue.trim() || isLoading) {
+    const trimmedInput = inputValue.trim()
+    if (!trimmedInput || isLoading) {
       return
     }
 
     append({
       role: "user",
-      content: inputValue,
+      content: trimmedInput,
     })
     setInputValue("")
   }
@@ -322,12 +322,13 @@ export default function AgentPage() {
                   </div>
 
                   <form onSubmit={handleFormSubmit} className="flex gap-2">
-                    <Input
+                    <input
+                      type="text"
                       value={inputValue}
                       onChange={handleInputChange}
                       placeholder="Ask the agent to retrieve data..."
                       disabled={isLoading}
-                      className="flex-1"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 flex-1"
                       autoComplete="off"
                     />
                     <Button type="submit" disabled={isLoading || !inputValue.trim()}>
