@@ -22,7 +22,7 @@ export default function AgentPage() {
     authSession: string
   } | null>(null)
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, input, setInput, handleSubmit, isLoading } = useChat({
     api: "/api/agent/chat",
   })
 
@@ -302,6 +302,8 @@ export default function AgentPage() {
 
                   <form
                     onSubmit={(e) => {
+                      e.preventDefault()
+                      if (!input?.trim() || isLoading) return
                       console.log("[v0] Form submitted with input:", input)
                       handleSubmit(e)
                     }}
@@ -311,7 +313,7 @@ export default function AgentPage() {
                       value={input}
                       onChange={(e) => {
                         console.log("[v0] Input changed:", e.target.value)
-                        handleInputChange(e)
+                        setInput(e.target.value)
                       }}
                       placeholder="Ask the agent to retrieve data..."
                       disabled={isLoading}
