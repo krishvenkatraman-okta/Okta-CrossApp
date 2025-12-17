@@ -14,7 +14,7 @@ function createTools(req: Request) {
       whereClause: z.string().optional().describe("Optional WHERE clause (e.g., 'StageName = \\'Closed Won\\'')"),
       limit: z.number().default(10).describe("Maximum number of records to return"),
     }),
-    execute: async ({ objectName, fields, whereClause, limit }) => {
+    execute: async ({ objectName, fields, whereClause, limit }): Promise<string> => {
       const steps: string[] = []
       let finalResult: string
 
@@ -161,7 +161,7 @@ function createTools(req: Request) {
 
         console.log(`[v0] Tool result message length: ${resultMessage.length}`)
         console.log(`[v0] Tool result preview:`, resultMessage.substring(0, 300))
-        console.log(`[v0] About to return result message`)
+        console.log(`[v0] Returning result message`)
 
         finalResult = resultMessage
       } catch (error) {
