@@ -1,4 +1,4 @@
-import { convertToModelMessages, streamText, tool, type UIMessage } from "ai"
+import { streamText, tool, type UIMessage } from "ai"
 import { z } from "zod"
 import { getIdTokenFromCookies, requestIdJag, exchangeIdJagForAuth0Token } from "@/lib/server-token-exchange"
 
@@ -278,7 +278,11 @@ export async function POST(req: Request) {
     console.log(`[v0] Message count: ${messages.length}`)
     console.log(`[v0] Latest message:`, messages[messages.length - 1])
 
-    const prompt = convertToModelMessages(messages)
+    const coreMessages = messages.map((msg) => ({
+      role: msg.role as "user" | "assistant",
+      content: msg.content || "",
+    }))
+
     const tools = createTools(req)
 
     console.log(`[v0] Tools created and ready`)
@@ -306,7 +310,7 @@ If there's a "federated_connection_refresh_token_not_found" error:
 - Keep your explanation brief and direct them to follow the popup window
 
 Keep your responses focused on the data and steps shown. Always display all steps to the user so they can see the complete flow.`,
-      messages: prompt,
+      messages: coreMessages,
       tools,
       maxTokens: 4000,
       maxSteps: 15,
