@@ -25,9 +25,11 @@ export default function AgentPage() {
 
   const [inputValue, setInputValue] = useState("")
 
-  const { messages, isLoading, append } = useChat({
+  const chatState = useChat({
     api: "/api/agent/chat",
   })
+
+  const { messages, isLoading, append } = chatState
 
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
@@ -120,20 +122,18 @@ export default function AgentPage() {
     e.preventDefault()
 
     const trimmedInput = inputValue.trim()
-    if (!trimmedInput || isLoading) {
+    if (!trimmedInput || isLoading || !append) {
       return
     }
 
     try {
-      if (append) {
-        await append({
-          role: "user",
-          content: trimmedInput,
-        })
-        setInputValue("")
-      }
+      await append({
+        role: "user",
+        content: trimmedInput,
+      })
+      setInputValue("")
     } catch (error) {
-      console.error("[v0] Error sending message:", error)
+      console.error("Error sending message:", error)
     }
   }
 
@@ -169,6 +169,23 @@ export default function AgentPage() {
           sessionStorage.removeItem(key)
         }
       })
+    }
+  }
+
+  const examplePrompts = ["Get Salesforce opportunities", "Show me financial data", "What are the latest sales leads?"]
+
+  const handlePromptClick = async (prompt: string) => {
+    if (isLoading || !append) return
+
+    setInputValue(prompt)
+    try {
+      await append({
+        role: "user",
+        content: prompt,
+      })
+      setInputValue("")
+    } catch (error) {
+      console.error("Error sending message:", error)
     }
   }
 
@@ -255,14 +272,22 @@ export default function AgentPage() {
                 <div className="space-y-4">
                   <div className="flex h-[500px] flex-col gap-4 overflow-y-auto rounded-lg border bg-muted/20 p-4">
                     {messages.length === 0 && (
-                      <div className="flex flex-1 items-center justify-center text-muted-foreground">
+                      <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
                         <div className="text-center">
-                          <p className="mb-2 text-sm font-medium">Welcome! Try asking:</p>
-                          <ul className="space-y-1 text-xs">
-                            <li>• "Get Salesforce opportunities"</li>
-                            <li>• "Show me financial data"</li>
-                            <li>• "What are the latest sales leads?"</li>
-                          </ul>
+                          <p className="mb-4 text-sm font-medium">Welcome! Try asking:</p>
+                          <div className="flex flex-col gap-2">
+                            {examplePrompts.map((prompt, index) => (
+                              <Button
+                                key={index}
+                                onClick={() => handlePromptClick(prompt)}
+                                variant="outline"
+                                className="w-full justify-start"
+                                disabled={isLoading}
+                              >
+                                {prompt}
+                              </Button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
