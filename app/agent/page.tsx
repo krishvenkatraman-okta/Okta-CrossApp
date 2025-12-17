@@ -145,7 +145,7 @@ export default function AgentPage() {
   }
 
   const sendMessage = async (content: string) => {
-    if (isLoading) return
+    if (!content.trim()) return
 
     const userMessage = {
       id: Date.now().toString(),
@@ -153,126 +153,60 @@ export default function AgentPage() {
       content,
     }
 
-    setMessages((prev) => [...prev, userMessage])
+    const messagesWithUser = [...messages, userMessage]
+    setMessages(messagesWithUser)
     setIsLoading(true)
     setInputValue("")
 
     try {
-      console.log("[v0] Sending message:", content)
+      console.log("[v0] Sending message to agent API")
 
       const response = await fetch("/api/agent/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMessage],
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: messagesWithUser }),
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`API error: ${response.status}`)
       }
 
       const contentType = response.headers.get("content-type") || ""
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
+      console.log("[v0] Response content-type:", contentType)
 
-      const assistantMessageId = (Date.now() + 1).toString()
-      let accumulatedContent = ""
+      if (contentType.includes("application/json")) {
+        const data = await response.json()
+        console.log("[v0] Received JSON response with tokens:", Object.keys(data.tokens || {}))
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: assistantMessageId,
-          role: "assistant",
-          content: "",
-        },
-      ])
-
-      if (reader) {
-        if (contentType.includes("text/plain")) {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            const chunk = decoder.decode(value, { stream: true })
-            accumulatedContent += chunk
-
-            setMessages((prev) =>
-              prev.map((m) => (m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)),
-            )
+        // Store all tokens in the token store
+        if (data.tokens) {
+          if (data.tokens.web_id_token) {
+            tokenStore.setToken("web_id_token", data.tokens.web_id_token)
           }
-        } else {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            const chunk = decoder.decode(value, { stream: true })
-            const lines = chunk.split("\n")
-
-            for (const line of lines) {
-              if (!line.trim()) continue
-
-              if (line.startsWith("0:")) {
-                try {
-                  const data = JSON.parse(line.slice(2))
-
-                  if (typeof data === "string") {
-                    accumulatedContent += data
-
-                    setMessages((prev) =>
-                      prev.map((m) => (m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)),
-                    )
-                  }
-                } catch (e) {
-                  console.error("[v0] Error parsing text chunk:", e)
-                }
-              } else if (line.startsWith("9:")) {
-                try {
-                  const toolData = JSON.parse(line.slice(2))
-
-                  if (toolData.result) {
-                    const result = toolData.result
-                    let toolMessage = ""
-
-                    if (typeof result === "object" && result.message) {
-                      toolMessage = "\n\n" + result.message
-
-                      if (result.tokens) {
-                        Object.entries(result.tokens).forEach(([key, value]) => {
-                          if (typeof value === "string") {
-                            tokenStore.setToken(key as any, value)
-                          }
-                        })
-                      }
-
-                      if (result.requiresConnection) {
-                        setPendingRetry(content)
-                        setShowConnectAccount(true)
-                      }
-                    } else if (typeof result === "string") {
-                      toolMessage = "\n\n" + result
-                    }
-
-                    if (toolMessage) {
-                      accumulatedContent += toolMessage
-
-                      setMessages((prev) =>
-                        prev.map((m) => (m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)),
-                      )
-                    }
-                  }
-                } catch (e) {
-                  console.error("[v0] Error parsing tool data:", e)
-                }
-              }
-            }
+          if (data.tokens.web_access_token) {
+            tokenStore.setToken("web_access_token", data.tokens.web_access_token)
+          }
+          if (data.tokens.id_jag_token) {
+            tokenStore.setToken("id_jag_token", data.tokens.id_jag_token)
+          }
+          if (data.tokens.auth0_access_token) {
+            tokenStore.setToken("auth0_access_token", data.tokens.auth0_access_token)
           }
         }
+
+        // Update the assistant message with the result
+        setMessages((prev) => prev.map((msg) => (msg.id === userMessage.id ? { ...msg, content: data.result } : msg)))
+        return
       }
 
-      setIsLoading(false)
+      // Handle plain text response
+      if (contentType.includes("text/plain")) {
+        const text = await response.text()
+        console.log("[v0] Received plain text response, length:", text.length)
+
+        setMessages((prev) => prev.map((msg) => (msg.id === userMessage.id ? { ...msg, content: text } : msg)))
+        return
+      }
     } catch (error) {
       console.error("[v0] Error sending message:", error)
       setMessages((prev) => [
@@ -284,6 +218,8 @@ export default function AgentPage() {
             "I received your request but encountered an issue retrieving the data. Please check the console logs for details.",
         },
       ])
+      setIsLoading(false)
+    } finally {
       setIsLoading(false)
     }
   }

@@ -8,17 +8,35 @@ async function querySalesforceData(
   objectName: string,
   fields: string[],
   whereClause?: string,
-  limit = 10,
-): Promise<string> {
+): Promise<{ result: string; tokens: Record<string, string> }> {
   const steps: string[] = []
-
-  steps.push("🔐 Step 1: Retrieved Web ID Token from your authenticated session")
+  const tokens: Record<string, string> = {}
 
   try {
     const idToken = getIdTokenFromCookies(req)
     if (!idToken) {
       throw new Error("Not authenticated")
     }
+    tokens.web_id_token = idToken
+
+    // Also get access token from cookies if available
+    const cookieHeader = req.headers.get("cookie")
+    if (cookieHeader) {
+      const cookies = Object.fromEntries(
+        cookieHeader.split("; ").map((cookie) => {
+          const [name, ...rest] = cookie.split("=")
+          return [name, rest.join("=")]
+        }),
+      )
+      const accessToken = cookies["web_okta_access_token"]
+      if (accessToken) {
+        tokens.web_access_token = accessToken
+      }
+    }
+
+    steps.push("🔐 Step 1: Retrieved Web ID Token and Access Token from Okta")
+    steps.push("   ✅ Web ID Token: Retrieved from authenticated session")
+    steps.push("   ✅ Web Access Token: Retrieved from authenticated session")
 
     const salesforceDomain = process.env.SALESFORCE_DOMAIN
     const auth0Audience = process.env.AUTH0_AUDIENCE
@@ -28,13 +46,19 @@ async function querySalesforceData(
       throw new Error("SALESFORCE_DOMAIN, AUTH0_AUDIENCE, or GATEWAY_URL not configured")
     }
 
-    steps.push("🔄 Step 2: Requesting cross-app ID-JAG for Gateway with resource: Salesforce")
-    const idJagToken = await requestIdJag(idToken, salesforceDomain, auth0Audience)
-    steps.push("✅ Step 2 Complete: Received ID-JAG for Gateway from Okta")
+    steps.push("")
+    steps.push("👤 Step 2: User requesting Salesforce opportunities")
 
-    steps.push("🎫 Step 3: Trading ID-JAG for Okta Relay Access Token")
+    steps.push("")
+    steps.push("🔄 Step 3: Requesting cross-app ID-JAG for Auth0 with resource: Salesforce")
+    const idJagToken = await requestIdJag(idToken, salesforceDomain, auth0Audience)
+    tokens.id_jag_token = idJagToken
+    steps.push("   ✅ ID-JAG Token: Received from Okta")
+
+    steps.push("")
+    steps.push("🎫 Step 4: Trading ID-JAG for Auth0 Access Token with resource: Salesforce")
     const scope = process.env.SALESFORCE_SCOPE || "salesforce:read"
-    const accessToken = await exchangeIdJagForAuth0Token(
+    const auth0AccessToken = await exchangeIdJagForAuth0Token(
       idJagToken,
       process.env.AUTH0_TOKEN_ENDPOINT!,
       process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
@@ -42,10 +66,12 @@ async function querySalesforceData(
       scope,
       salesforceDomain,
     )
-    steps.push("✅ Step 3 Complete: Received Okta Relay Access Token for Gateway")
+    tokens.auth0_access_token = auth0AccessToken
+    steps.push("   ✅ Auth0 Access Token: Received for Salesforce resource")
 
-    const soql = `SELECT ${fields.join(", ")} FROM ${objectName}${whereClause ? ` WHERE ${whereClause}` : ""} LIMIT ${limit}`
-    steps.push(`📡 Step 4: Querying Salesforce via Gateway with Okta Relay Access Token`)
+    const soql = `SELECT ${fields.join(", ")} FROM ${objectName}${whereClause ? ` WHERE ${whereClause}` : ""}`
+    steps.push("")
+    steps.push(`📡 Step 5: Calling Egress Okta Relay (Gateway) with Auth0 Access Token`)
     steps.push(`   Query: ${soql}`)
 
     const encodedQuery = encodeURIComponent(soql)
@@ -56,7 +82,7 @@ async function querySalesforceData(
     const response = await fetch(fullUrl, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${auth0AccessToken}`,
         "X-GATEWAY-Host": hostname,
         "Content-Type": "application/json",
         Accept: "application/json",
@@ -68,16 +94,21 @@ async function querySalesforceData(
       const contentType = response.headers.get("content-type") || ""
 
       if (contentType.includes("text/html")) {
-        steps.push("❌ Step 4 Error: Gateway returned HTML error page instead of JSON")
-        return `${steps.join("\n")}\n\n❌ Error: Gateway configuration issue`
+        steps.push("")
+        steps.push("❌ Error: Gateway returned HTML error page instead of JSON")
+        return { result: `${steps.join("\n")}\n\n❌ Gateway configuration issue`, tokens }
       }
 
-      steps.push(`❌ Step 4 Error: Gateway returned status ${response.status}`)
-      return `${steps.join("\n")}\n\n❌ Error: ${errorText}`
+      steps.push("")
+      steps.push(`❌ Error: Gateway returned status ${response.status}`)
+      return { result: `${steps.join("\n")}\n\n❌ ${errorText}`, tokens }
     }
 
     const data = await response.json()
-    steps.push(`✅ Step 4 Complete: Retrieved ${data.records?.length || 0} records from Salesforce`)
+
+    steps.push("")
+    steps.push(`✅ Step 6: Received response from Egress Okta Relay (Gateway)`)
+    steps.push(`   Retrieved ${data.records?.length || 0} Opportunity records from Salesforce`)
 
     const records = data.records || []
     const formattedRecords = records
@@ -90,10 +121,16 @@ async function querySalesforceData(
       })
       .join("\n\n")
 
-    return `${steps.join("\n")}\n\n📊 Salesforce Query Results:\n\nFound ${records.length} ${objectName} records:\n\n${formattedRecords}`
+    return {
+      result: `${steps.join("\n")}\n\n📊 Salesforce Query Results:\n\nFound ${records.length} ${objectName} records:\n\n${formattedRecords}`,
+      tokens,
+    }
   } catch (error) {
     console.error(`[v0] Query error:`, error)
-    return `${steps.join("\n")}\n\n❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`
+    return {
+      result: `${steps.join("\n")}\n\n❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+      tokens,
+    }
   }
 }
 
@@ -114,21 +151,21 @@ export async function POST(req: Request) {
     if (userMessage.includes("salesforce") && userMessage.includes("opportunit")) {
       console.log(`[v0] Detected Salesforce opportunity query - executing directly`)
 
-      const result = await querySalesforceData(
-        req,
-        "Opportunity",
-        ["Id", "Name", "Amount", "StageName", "CloseDate", "AccountId"],
-        undefined,
-        10,
-      )
+      const { result, tokens } = await querySalesforceData(req, "Opportunity", [
+        "Id",
+        "Name",
+        "Amount",
+        "StageName",
+        "CloseDate",
+        "AccountId",
+      ])
 
       console.log(`[v0] Query result length: ${result.length}`)
-      console.log(`[v0] Query result preview:`, result.substring(0, 300))
+      console.log(`[v0] Tokens collected: ${Object.keys(tokens).join(", ")}`)
 
-      // Return simple text stream
-      return new Response(result, {
+      return new Response(JSON.stringify({ result, tokens }), {
         headers: {
-          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Type": "application/json; charset=utf-8",
         },
       })
     }
