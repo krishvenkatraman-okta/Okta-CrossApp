@@ -16,6 +16,7 @@ function createTools(req: Request) {
     }),
     execute: async ({ objectName, fields, whereClause, limit }) => {
       const steps: string[] = []
+      let finalResult: string
 
       steps.push("🔐 Step 1: Retrieved Web ID Token from your authenticated session")
 
@@ -92,7 +93,8 @@ function createTools(req: Request) {
             steps.push(`   Status: ${response.status}`)
             steps.push(`   This usually means the gateway URL or configuration is incorrect`)
 
-            return `${steps.join("\n")}\n\n❌ Error: Gateway returned HTML (status ${response.status}). Check GATEWAY_URL configuration.`
+            finalResult = `${steps.join("\n")}\n\n❌ Error: Gateway returned HTML (status ${response.status}). Check GATEWAY_URL configuration.`
+            return finalResult
           }
 
           let errorData
@@ -121,7 +123,8 @@ function createTools(req: Request) {
             steps.push("👉 Please authorize the Connected Account in the popup window")
             steps.push("🔁 After authorization, your request will automatically retry")
 
-            return `${steps.join("\n")}\n\nRequires connection: true\n\nError: ${errorData.error}`
+            finalResult = `${steps.join("\n")}\n\nRequires connection: true\n\nError: ${errorData.error}`
+            return finalResult
           }
 
           throw new Error(`Gateway request failed: ${response.status} - ${JSON.stringify(errorData)}`)
@@ -135,7 +138,8 @@ function createTools(req: Request) {
           steps.push(`   Content-Type: ${contentType}`)
           steps.push(`   This indicates a gateway configuration or routing issue`)
 
-          return `${steps.join("\n")}\n\n❌ Error: Gateway returned ${contentType} instead of JSON. Response preview: ${responseText.substring(0, 200)}`
+          finalResult = `${steps.join("\n")}\n\n❌ Error: Gateway returned ${contentType} instead of JSON. Response preview: ${responseText.substring(0, 200)}`
+          return finalResult
         }
 
         const data = await response.json()
@@ -159,15 +163,17 @@ function createTools(req: Request) {
         console.log(`[v0] Tool result preview:`, resultMessage.substring(0, 300))
         console.log(`[v0] About to return result message`)
 
-        // Return the result message explicitly
-        return resultMessage
+        finalResult = resultMessage
       } catch (error) {
         console.error(`[v0] Query error:`, error)
         const errorMessage = `${steps.join("\n")}\n\n❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`
         console.log(`[v0] Returning error message:`, errorMessage.substring(0, 200))
 
-        return errorMessage
+        finalResult = errorMessage
       }
+
+      console.log(`[v0] Returning final result, length: ${finalResult.length}`)
+      return finalResult
     },
   })
 
