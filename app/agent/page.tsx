@@ -304,7 +304,7 @@ export default function AgentPage() {
                       disabled={isLoading}
                       className="flex-1"
                     />
-                    <Button type="submit" disabled={isLoading || !input.trim()}>
+                    <Button type="submit" disabled={isLoading || !input?.trim()}>
                       {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </Button>
                   </form>
