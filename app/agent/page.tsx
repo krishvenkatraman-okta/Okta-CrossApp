@@ -154,8 +154,11 @@ export default function AgentPage() {
 
     setMessages((prev) => [...prev, userMessage])
     setIsLoading(true)
+    setInputValue("")
 
     try {
+      console.log("[v0] Sending message:", content)
+
       const response = await fetch("/api/agent/chat", {
         method: "POST",
         headers: {
@@ -172,46 +175,85 @@ export default function AgentPage() {
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
-      const assistantMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "",
-        toolInvocations: [],
-      }
+
+      const assistantMessageId = (Date.now() + 1).toString()
+      let accumulatedContent = ""
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
 
-          const chunk = decoder.decode(value)
-          const lines = chunk.split("\n").filter((line) => line.trim() !== "")
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split("\n")
 
           for (const line of lines) {
-            if (line.startsWith("0:")) {
-              const jsonStr = line.slice(2)
-              try {
-                const data = JSON.parse(jsonStr)
-                if (typeof data === "string") {
-                  assistantMessage.content += data
+            if (!line.trim()) continue
 
-                  if (
-                    data.includes("federated_connection_refresh_token_not_found") ||
-                    data.includes("Connected account required")
-                  ) {
-                    console.log("[v0] Connection required detected, saving retry request")
+            // AI SDK UI message stream format
+            if (line.startsWith("0:")) {
+              try {
+                const data = JSON.parse(line.slice(2))
+
+                // Handle text chunks
+                if (typeof data === "string") {
+                  accumulatedContent += data
+
+                  // Update message in state
+                  setMessages((prev) => {
+                    const existing = prev.find((m) => m.id === assistantMessageId)
+                    if (existing) {
+                      return prev.map((m) => (m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m))
+                    } else {
+                      return [
+                        ...prev,
+                        {
+                          id: assistantMessageId,
+                          role: "assistant",
+                          content: accumulatedContent,
+                        },
+                      ]
+                    }
+                  })
+                }
+              } catch (e) {
+                console.error("[v0] Error parsing stream chunk:", e)
+              }
+            }
+            // Handle tool calls and results
+            else if (line.startsWith("9:")) {
+              try {
+                const data = JSON.parse(line.slice(2))
+                console.log("[v0] Tool data received:", data)
+
+                // Update tokens if available in tool result
+                if (data.result && typeof data.result === "object") {
+                  const result = data.result
+
+                  if (result.tokens) {
+                    Object.entries(result.tokens).forEach(([key, value]) => {
+                      if (typeof value === "string") {
+                        console.log(`[v0] Storing token: ${key}`)
+                        tokenStore.setToken(key as any, value)
+                      }
+                    })
+                  }
+
+                  // Handle connected account requirement
+                  if (result.requiresConnection) {
+                    console.log("[v0] Connection required, saving retry request")
                     setPendingRetry(content)
                   }
                 }
               } catch (e) {
-                console.error("[v0] Error parsing stream data:", e)
+                console.error("[v0] Error parsing tool data:", e)
               }
             }
           }
         }
       }
 
-      setMessages((prev) => [...prev, assistantMessage])
+      console.log("[v0] Stream completed successfully")
     } catch (error) {
       console.error("[v0] Error sending message:", error)
       const errorMessage = {

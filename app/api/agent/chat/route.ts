@@ -52,11 +52,6 @@ function createTools(req: Request) {
         steps.push(`📡 Step 4: Querying Salesforce via Gateway with Okta Relay Access Token`)
         steps.push(`   Query: ${soql}`)
 
-        const tokenData = {
-          salesforce_id_jag_token: idJagToken,
-          salesforce_auth0_access_token: accessToken,
-        }
-
         const gatewayUrl = process.env.GATEWAY_URL
         if (!gatewayUrl) {
           throw new Error("GATEWAY_URL not configured")
@@ -67,15 +62,20 @@ function createTools(req: Request) {
         const fullUrl = `${gatewayUrl}${endpoint}`
         const hostname = salesforceDomain.replace(/^https?:\/\//, "")
 
-        const response = await fetch(fullUrl, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            "X-GATEWAY-Host": hostname,
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/gateway-test/salesforce-data`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              accessToken,
+              gatewayUrl: fullUrl,
+              hostname,
+            }),
           },
-        })
+        )
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
@@ -106,7 +106,8 @@ function createTools(req: Request) {
               message: steps.join("\n"),
               error: errorData.error,
               tokens: {
-                ...tokenData,
+                salesforce_id_jag_token: idJagToken,
+                salesforce_okta_relay_access_token: accessToken,
                 me_id_jag_token: meIdJag,
                 me_auth0_access_token: meAccessToken,
               },
