@@ -187,20 +187,22 @@ export default function AgentPage() {
           if (done) break
 
           const chunk = decoder.decode(value, { stream: true })
+          console.log("[v0] Raw chunk received:", chunk.substring(0, 200))
           const lines = chunk.split("\n")
 
           for (const line of lines) {
             if (!line.trim()) continue
 
+            console.log("[v0] Processing line type:", line.substring(0, 3))
+
             if (line.startsWith("0:")) {
               try {
                 const data = JSON.parse(line.slice(2))
+                console.log("[v0] Text data:", typeof data, data)
 
-                // Handle text chunks
                 if (typeof data === "string") {
                   accumulatedContent += data
 
-                  // Update or add message in state
                   setMessages((prev) => {
                     const existing = prev.find((m) => m.id === assistantMessageId)
                     if (existing) {
@@ -219,19 +221,20 @@ export default function AgentPage() {
                   })
                 }
               } catch (e) {
-                console.error("[v0] Error parsing stream chunk:", e)
+                console.error("[v0] Error parsing stream chunk:", e, "Line:", line)
               }
             } else if (line.startsWith("9:")) {
               try {
                 const toolData = JSON.parse(line.slice(2))
                 console.log("[v0] Tool data received:", toolData)
+                console.log("[v0] Tool result type:", typeof toolData.result)
+                console.log("[v0] Tool result:", toolData.result)
 
-                // Extract tool result
                 if (toolData.result) {
                   const result = toolData.result
 
-                  // If result has a message, append it to accumulated content
                   if (typeof result === "object" && result.message) {
+                    console.log("[v0] Appending tool message to content")
                     const formattedMessage = "\n\n" + result.message
                     accumulatedContent += formattedMessage
 
@@ -254,7 +257,6 @@ export default function AgentPage() {
                       }
                     })
 
-                    // Store tokens if available
                     if (result.tokens) {
                       Object.entries(result.tokens).forEach(([key, value]) => {
                         if (typeof value === "string") {
@@ -264,14 +266,13 @@ export default function AgentPage() {
                       })
                     }
 
-                    // Handle connected account requirement
                     if (result.requiresConnection) {
                       console.log("[v0] Connection required, saving retry request")
                       setPendingRetry(content)
                       setShowConnectAccount(true)
                     }
                   } else if (typeof result === "string") {
-                    // Handle string results directly
+                    console.log("[v0] Appending string result to content")
                     const formattedMessage = "\n\n" + result
                     accumulatedContent += formattedMessage
 
@@ -296,8 +297,10 @@ export default function AgentPage() {
                   }
                 }
               } catch (e) {
-                console.error("[v0] Error parsing tool data:", e)
+                console.error("[v0] Error parsing tool data:", e, "Line:", line)
               }
+            } else if (line.startsWith("2:") || line.startsWith("8:")) {
+              console.log("[v0] Other stream data type:", line.substring(0, 50))
             }
           }
         }
@@ -305,6 +308,7 @@ export default function AgentPage() {
 
       console.log("[v0] Stream completed successfully")
       console.log("[v0] Final accumulated content length:", accumulatedContent.length)
+      console.log("[v0] Final content:", accumulatedContent)
     } catch (error) {
       console.error("[v0] Error sending message:", error)
       const errorMessage = {

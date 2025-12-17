@@ -80,10 +80,24 @@ function createTools(req: Request) {
         })
 
         console.log(`[v0] Gateway response status: ${response.status}`)
+        const contentType = response.headers.get("content-type") || ""
+        console.log(`[v0] Gateway response content-type: ${contentType}`)
 
         if (!response.ok) {
           const errorText = await response.text()
-          console.log(`[v0] Gateway error response:`, errorText)
+          console.log(`[v0] Gateway error response:`, errorText.substring(0, 500))
+
+          if (contentType.includes("text/html")) {
+            steps.push("❌ Step 4 Error: Gateway returned HTML error page instead of JSON")
+            steps.push(`   Status: ${response.status}`)
+            steps.push(`   This usually means the gateway URL or configuration is incorrect`)
+
+            return {
+              success: false,
+              message: steps.join("\n"),
+              error: `Gateway returned HTML (status ${response.status}). Check GATEWAY_URL configuration.`,
+            }
+          }
 
           let errorData
           try {
@@ -125,6 +139,21 @@ function createTools(req: Request) {
           }
 
           throw new Error(`Gateway request failed: ${response.status} - ${JSON.stringify(errorData)}`)
+        }
+
+        if (!contentType.includes("application/json")) {
+          const responseText = await response.text()
+          console.log(`[v0] Gateway returned non-JSON response:`, responseText.substring(0, 500))
+
+          steps.push("❌ Step 4 Error: Gateway returned non-JSON response")
+          steps.push(`   Content-Type: ${contentType}`)
+          steps.push(`   This indicates a gateway configuration or routing issue`)
+
+          return {
+            success: false,
+            message: steps.join("\n"),
+            error: `Gateway returned ${contentType} instead of JSON. Response preview: ${responseText.substring(0, 200)}`,
+          }
         }
 
         const data = await response.json()
