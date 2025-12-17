@@ -7,13 +7,7 @@ import { tokenStore } from "@/lib/token-store"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Copy, Check, Eye, EyeOff } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface TokenInfo {
   type: string
@@ -79,7 +73,13 @@ export function TokenPanel() {
       case "id_jag_token":
         return "ID-JAG Token"
       case "auth0_access_token":
-        return "Auth0 Access Token"
+        return "Okta Relay Access Token"
+      case "salesforce_auth0_access_token":
+        return "Okta Relay Access Token (Salesforce)"
+      case "finance_auth0_access_token":
+        return "Okta Relay Access Token (Finance)"
+      case "me_auth0_access_token":
+        return "Okta Relay Access Token (ME)"
       case "web_id_token":
         return "Web ID Token"
       case "web_access_token":
@@ -96,9 +96,15 @@ export function TokenPanel() {
       case "access_token":
         return "OAuth 2.0 access token for resource access"
       case "id_jag_token":
-        return "Cross-app access token (ID token for JAG)"
+        return "Cross-app access token (ID-JAG for Gateway)"
       case "auth0_access_token":
-        return "Auth0 access token for financial resource API"
+        return "Okta Relay access token for resource API"
+      case "salesforce_auth0_access_token":
+        return "Okta Relay access token for Salesforce Gateway"
+      case "finance_auth0_access_token":
+        return "Okta Relay access token for Financial Gateway"
+      case "me_auth0_access_token":
+        return "Okta Relay access token for ME Connected Accounts"
       case "web_id_token":
         return "Web Client ID token from Okta"
       case "web_access_token":
@@ -173,7 +179,9 @@ export function TokenPanel() {
                 </div>
               </div>
               <ScrollArea className="h-24 rounded-md border bg-muted/50 p-3">
-                <code className="break-all text-xs font-mono">{formatToken(currentToken.token, currentToken.type)}</code>
+                <code className="break-all text-xs font-mono">
+                  {formatToken(currentToken.token, currentToken.type)}
+                </code>
               </ScrollArea>
             </div>
 

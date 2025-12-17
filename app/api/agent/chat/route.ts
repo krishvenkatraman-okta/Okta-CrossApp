@@ -15,15 +15,15 @@ function createTools(req: Request) {
       limit: z.number().default(10).describe("Maximum number of records to return"),
     }),
     execute: async ({ objectName, fields, whereClause, limit }) => {
-      console.log(`[v0] ===== SALESFORCE QUERY STARTED =====`)
-      console.log(`[v0] Query: ${objectName}, Fields: ${fields.join(", ")}`)
+      const steps: string[] = []
+
+      steps.push("🔐 Step 1: Retrieved Web ID Token from your authenticated session")
 
       try {
         const idToken = getIdTokenFromCookies(req)
         if (!idToken) {
           throw new Error("Not authenticated")
         }
-        console.log(`[v0] Step 1 ✓: Web ID Token retrieved`)
 
         const salesforceDomain = process.env.SALESFORCE_DOMAIN
         const auth0Audience = process.env.AUTH0_AUDIENCE
@@ -32,9 +32,11 @@ function createTools(req: Request) {
           throw new Error("SALESFORCE_DOMAIN or AUTH0_AUDIENCE not configured")
         }
 
+        steps.push("🔄 Step 2: Requesting cross-app ID-JAG for Gateway with resource: Salesforce")
         const idJagToken = await requestIdJag(idToken, salesforceDomain, auth0Audience)
-        console.log(`[v0] Step 2 ✓: Salesforce ID-JAG received`)
+        steps.push("✅ Step 2 Complete: Received ID-JAG for Gateway from Okta")
 
+        steps.push("🎫 Step 3: Trading ID-JAG for Okta Relay Access Token")
         const scope = process.env.SALESFORCE_SCOPE || "salesforce:read"
         const accessToken = await exchangeIdJagForAuth0Token(
           idJagToken,
@@ -44,10 +46,11 @@ function createTools(req: Request) {
           scope,
           salesforceDomain,
         )
-        console.log(`[v0] Step 3 ✓: Auth0 Access Token received`)
+        steps.push("✅ Step 3 Complete: Received Okta Relay Access Token for Gateway")
 
         const soql = `SELECT ${fields.join(", ")} FROM ${objectName}${whereClause ? ` WHERE ${whereClause}` : ""} LIMIT ${limit}`
-        console.log(`[v0] SOQL: ${soql}`)
+        steps.push(`📡 Step 4: Querying Salesforce via Gateway with Okta Relay Access Token`)
+        steps.push(`   Query: ${soql}`)
 
         const tokenData = {
           salesforce_id_jag_token: idJagToken,
@@ -59,14 +62,10 @@ function createTools(req: Request) {
           throw new Error("GATEWAY_URL not configured")
         }
 
-        console.log(`[v0] Step 4: Calling gateway`)
         const encodedQuery = encodeURIComponent(soql)
         const endpoint = `/services/data/v62.0/query?q=${encodedQuery}`
         const fullUrl = `${gatewayUrl}${endpoint}`
         const hostname = salesforceDomain.replace(/^https?:\/\//, "")
-
-        console.log(`[v0] Gateway URL: ${fullUrl}`)
-        console.log(`[v0] X-GATEWAY-Host: ${hostname}`)
 
         const response = await fetch(fullUrl, {
           method: "GET",
@@ -78,14 +77,13 @@ function createTools(req: Request) {
           },
         })
 
-        console.log(`[v0] Gateway response status: ${response.status}`)
-
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
-          console.log(`[v0] Error response:`, errorData)
 
           if (errorData.error === "federated_connection_refresh_token_not_found") {
-            console.log(`[v0] Connected account required - initiating ME flow`)
+            steps.push("⚠️ Step 4 Error: Federation account not found in token vault")
+            steps.push("💡 Solution: We need to initiate a Connected Account flow to store your Salesforce credentials")
+            steps.push("🔄 Initiating Connected Account setup with ME token...")
 
             const meIdJag = await requestIdJag(idToken, `${process.env.AUTH0_DOMAIN}/me/`, auth0Audience)
             const meAccessToken = await exchangeIdJagForAuth0Token(
@@ -97,11 +95,15 @@ function createTools(req: Request) {
               `${process.env.AUTH0_DOMAIN}/me/`,
             )
 
+            steps.push("✅ ME Access Token obtained - Ready to create Connected Account")
+            steps.push("👉 Please authorize the Connected Account in the popup window")
+            steps.push("🔁 After authorization, your request will automatically retry")
+
             return {
               success: false,
               requiresConnection: true,
-              message:
-                "Connected account required. Please use the UI to connect your Salesforce account, then try again.",
+              steps,
+              message: steps.join("\n"),
               error: errorData.error,
               tokens: {
                 ...tokenData,
@@ -115,12 +117,10 @@ function createTools(req: Request) {
         }
 
         const data = await response.json()
-        console.log(`[v0] Query successful, records: ${data.records?.length || 0}`)
-        console.log(`[v0] ===== SALESFORCE QUERY COMPLETED =====`)
+        steps.push(`✅ Step 4 Complete: Retrieved ${data.records?.length || 0} records from Salesforce`)
 
         const records = data.records || []
 
-        // Format records in a simple, readable way
         const formattedOutput = records
           .map((record: any, index: number) => {
             const { attributes, ...rest } = record
@@ -128,22 +128,14 @@ function createTools(req: Request) {
           })
           .join("\n\n")
 
-        const resultMessage = `Found ${records.length} ${objectName} records:\n\n${formattedOutput}`
+        const resultMessage = `${steps.join("\n")}\n\n📊 Results:\n\nFound ${records.length} ${objectName} records:\n\n${formattedOutput}`
 
-        console.log(`[v0] Returning formatted result to LLM`)
-
-        console.log(`[v0] ===== TOOL RESULT BEING RETURNED =====`)
-        console.log(`[v0] Result type: ${typeof resultMessage}`)
-        console.log(`[v0] Result length: ${resultMessage.length} characters`)
-        console.log(`[v0] First 200 chars: ${resultMessage.substring(0, 200)}`)
-        console.log(`[v0] ===== END TOOL RESULT =====`)
-
-        // Return a simple string that the LLM can easily present
         return resultMessage
       } catch (error) {
         console.error(`[v0] Query error:`, error)
         return {
           success: false,
+          steps,
           error: error instanceof Error ? error.message : "Unknown error",
         }
       }
@@ -286,46 +278,26 @@ export async function POST(req: Request) {
 
     const result = await streamText({
       model: "anthropic/claude-sonnet-4",
-      system: `You are an AI agent that helps users access enterprise data through Okta cross-app access and Auth0 gateway.
-
-IMPORTANT: You MUST explain every step of what you're doing in detail. Be verbose and educational.
+      system: `You are an AI agent that helps users access enterprise data through Okta cross-app access and the Okta Relay Gateway.
 
 When a user asks for Salesforce data:
-1. First, explain that you're operating in a least-privilege security model and need to contact the Okta Egress Relay
-2. Explain that the relay will access the Token Vault using the user's Okta Access Token to retrieve the necessary credentials
-3. Then call the querySalesforceData tool
-4. If successful, present the results in a clear, formatted way
-5. If you get a "federated_connection_refresh_token_not_found" error, explain to the user in simple terms:
-   - "The Token Vault doesn't have your Salesforce credentials yet"
-   - "You need to do a one-time consent to link your Salesforce account"
-   - "This allows the gateway to securely access Salesforce on your behalf"
-   - Then call the connectSalesforceAccount tool to initiate the flow
+1. Explain that you'll retrieve the data using the secure cross-app authentication flow
+2. Call the querySalesforceData tool (it will return detailed steps automatically)
+3. Present the results clearly to the user
 
-Example verbose response:
-"I need to retrieve Salesforce opportunities for you. Here's what's happening behind the scenes:
+The tool will automatically show each step:
+- Step 1: Web ID Token retrieval from authenticated session
+- Step 2: Requesting cross-app ID-JAG for Gateway with resource Salesforce
+- Step 3: Trading ID-JAG for Okta Relay Access Token
+- Step 4: Querying Salesforce via Gateway
 
-🔐 Step 1: Security Model
-I operate with least privilege - I don't have direct access to Salesforce. Instead, I'll contact the Okta Egress Relay.
+If there's a "federated_connection_refresh_token_not_found" error:
+- Explain that we don't have a token in the token vault
+- The system needs to initiate a Connected Account flow
+- After the user authorizes, the request will automatically retry
+- Keep your explanation brief and direct them to follow the popup window
 
-🔄 Step 2: Token Exchange
-The relay will use your Okta Access Token to retrieve the necessary credentials from the Token Vault securely.
-
-📡 Step 3: Gateway Request
-Making the API call through the Auth0 gateway...
-
-[Then show the results]"
-
-If there's a federated_connection_refresh_token_not_found error, respond like:
-"⚠️ Token Vault Missing Credentials
-
-The Token Vault doesn't have your Salesforce credentials stored yet. This is normal for first-time access.
-
-You need to complete a one-time consent flow to link your Salesforce account. This will:
-- Securely store your Salesforce credentials in the Token Vault
-- Allow the gateway to access Salesforce on your behalf
-- Enable future requests without re-authenticating
-
-Let me initiate the connection flow for you..."`,
+Keep your responses focused on the data and steps shown. Always display all steps to the user so they can see the complete flow.`,
       messages: prompt,
       tools,
       maxTokens: 4000,

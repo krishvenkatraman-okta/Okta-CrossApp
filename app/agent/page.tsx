@@ -27,12 +27,33 @@ export default function AgentPage() {
   const [messages, setMessages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
+  const [userInfo, setUserInfo] = useState<{ name?: string; email?: string } | null>(null)
+  const [pendingRetry, setPendingRetry] = useState<string | null>(null)
+
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
     setLoading(false)
     const savedConnectedAccount = sessionStorage.getItem("connectedSalesforceAccount")
     if (savedConnectedAccount) {
       setConnectedAccount(savedConnectedAccount)
+    }
+
+    // Decode Web ID Token to get user information
+    const webIdToken = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("okta_web_id_token="))
+      ?.split("=")[1]
+
+    if (webIdToken) {
+      try {
+        const payload = JSON.parse(atob(webIdToken.split(".")[1]))
+        setUserInfo({
+          name: payload.name || payload.email?.split("@")[0],
+          email: payload.email,
+        })
+      } catch (error) {
+        console.error("[v0] Error decoding token:", error)
+      }
     }
   }, [])
 
@@ -43,12 +64,20 @@ export default function AgentPage() {
         setConnectedAccount("Salesforce")
         sessionStorage.setItem("connectedSalesforceAccount", "Salesforce")
         setPendingConnection(null)
+
+        if (pendingRetry) {
+          console.log("[v0] Auto-retrying original request:", pendingRetry)
+          setTimeout(() => {
+            sendMessage(pendingRetry)
+            setPendingRetry(null)
+          }, 1000)
+        }
       }
     }
 
     window.addEventListener("message", handleMessage)
     return () => window.removeEventListener("message", handleMessage)
-  }, [])
+  }, [pendingRetry])
 
   useEffect(() => {
     messages.forEach((message) => {
@@ -165,6 +194,14 @@ export default function AgentPage() {
                 const data = JSON.parse(jsonStr)
                 if (typeof data === "string") {
                   assistantMessage.content += data
+
+                  if (
+                    data.includes("federated_connection_refresh_token_not_found") ||
+                    data.includes("Connected account required")
+                  ) {
+                    console.log("[v0] Connection required detected, saving retry request")
+                    setPendingRetry(content)
+                  }
                 }
               } catch (e) {
                 console.error("[v0] Error parsing stream data:", e)
@@ -287,6 +324,11 @@ export default function AgentPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {userInfo && (
+              <div className="flex items-center gap-2 rounded-lg border bg-muted px-3 py-1.5">
+                <span className="text-sm font-medium">Welcome, {userInfo.name || userInfo.email}</span>
+              </div>
+            )}
             {connectedAccount && (
               <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5">
                 <span className="text-sm font-medium text-green-700 dark:text-green-400">
