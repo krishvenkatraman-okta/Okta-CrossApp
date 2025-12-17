@@ -92,11 +92,7 @@ function createTools(req: Request) {
             steps.push(`   Status: ${response.status}`)
             steps.push(`   This usually means the gateway URL or configuration is incorrect`)
 
-            return {
-              success: false,
-              message: steps.join("\n"),
-              error: `Gateway returned HTML (status ${response.status}). Check GATEWAY_URL configuration.`,
-            }
+            return `${steps.join("\n")}\n\n❌ Error: Gateway returned HTML (status ${response.status}). Check GATEWAY_URL configuration.`
           }
 
           let errorData
@@ -125,17 +121,7 @@ function createTools(req: Request) {
             steps.push("👉 Please authorize the Connected Account in the popup window")
             steps.push("🔁 After authorization, your request will automatically retry")
 
-            return {
-              success: false,
-              requiresConnection: true,
-              message: steps.join("\n"),
-              error: errorData.error,
-              tokens: {
-                ...tokenData,
-                me_id_jag_token: meIdJag,
-                me_auth0_access_token: meAccessToken,
-              },
-            }
+            return `${steps.join("\n")}\n\nRequires connection: true\n\nError: ${errorData.error}`
           }
 
           throw new Error(`Gateway request failed: ${response.status} - ${JSON.stringify(errorData)}`)
@@ -149,11 +135,7 @@ function createTools(req: Request) {
           steps.push(`   Content-Type: ${contentType}`)
           steps.push(`   This indicates a gateway configuration or routing issue`)
 
-          return {
-            success: false,
-            message: steps.join("\n"),
-            error: `Gateway returned ${contentType} instead of JSON. Response preview: ${responseText.substring(0, 200)}`,
-          }
+          return `${steps.join("\n")}\n\n❌ Error: Gateway returned ${contentType} instead of JSON. Response preview: ${responseText.substring(0, 200)}`
         }
 
         const data = await response.json()
@@ -173,19 +155,11 @@ function createTools(req: Request) {
 
         const resultMessage = `${steps.join("\n")}\n\n📊 Salesforce Query Results:\n\nFound ${records.length} ${objectName} records:\n\n${formattedRecords}`
 
-        return {
-          success: true,
-          message: resultMessage,
-          recordCount: records.length,
-          tokens: tokenData,
-        }
+        return resultMessage
       } catch (error) {
         console.error(`[v0] Query error:`, error)
         const errorMessage = `${steps.join("\n")}\n\n❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`
-        return {
-          success: false,
-          message: errorMessage,
-        }
+        return errorMessage
       }
     },
   })
@@ -214,22 +188,10 @@ function createTools(req: Request) {
         const data = await response.json()
         console.log(`[v0] Connect account ticket created`)
 
-        return {
-          success: true,
-          connectUri: data.connectUri,
-          authorizationUrl: data.authorizationUrl,
-          ticket: data.ticket,
-          authSession: data.authSession,
-          sessionId: data.sessionId,
-          message: "Connected account flow initiated. User needs to authorize in popup window.",
-          instructions: "Open the authorizationUrl in a popup to let the user connect their Salesforce account.",
-        }
+        return `Connected account flow initiated. User needs to authorize in popup window.\n\nConnect URI: ${data.connectUri}\nAuthorization URL: ${data.authorizationUrl}\nTicket: ${data.ticket}\nAuth Session: ${data.authSession}\nSession ID: ${data.sessionId}`
       } catch (error) {
         console.error(`[v0] Connect account error:`, error)
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        }
+        return `Error: ${error instanceof Error ? error.message : "Unknown error"}`
       }
     },
   })
@@ -280,13 +242,7 @@ function createTools(req: Request) {
         console.log(`[v0] Step 5 ✓: Financial data parsed successfully`)
         console.log(`[v0] ===== FINANCIAL DATA REQUEST COMPLETED =====`)
 
-        return {
-          success: true,
-          dataType,
-          data,
-          message: `Successfully retrieved ${dataType} financial data`,
-          tokens: tokenData,
-        }
+        return `Successfully retrieved ${dataType} financial data\n\n${JSON.stringify(data)}`
       } catch (error) {
         console.error(`[v0] ===== FINANCIAL DATA REQUEST FAILED =====`)
         console.error(`[v0] Error in getFinancialData tool:`, error)
@@ -294,11 +250,7 @@ function createTools(req: Request) {
           console.error(`[v0] Error message: ${error.message}`)
           console.error(`[v0] Error stack: ${error.stack}`)
         }
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-          message: `Failed to retrieve financial ${dataType}`,
-        }
+        return `Failed to retrieve financial ${dataType}\n\nError: ${error instanceof Error ? error.message : "Unknown error"}`
       }
     },
   })
