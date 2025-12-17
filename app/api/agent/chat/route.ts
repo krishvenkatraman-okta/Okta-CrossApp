@@ -349,7 +349,7 @@ If there's an error, show the user exactly what went wrong and at which step.`,
 
     console.log(`[v0] Streaming response to client`)
 
-    return result.toDataStreamResponse()
+    return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error(`[v0] ===== AGENT CHAT ERROR =====`)
     console.error(`[v0] Error:`, error)
