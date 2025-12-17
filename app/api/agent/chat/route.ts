@@ -303,27 +303,23 @@ When a user asks for Salesforce data:
 1. Explain that you'll retrieve the data using the secure cross-app authentication flow
 2. Call the querySalesforceData tool with appropriate parameters
 3. The tool will return detailed step-by-step information about the authentication flow
-4. Present all the steps and results clearly to the user
+4. IMPORTANT: You MUST display the complete tool result to the user, including all authentication steps and data
 
-IMPORTANT: Always display the complete message returned by the tool, including all steps and any error messages. The steps show:
-- Step 1: Web ID Token retrieval from authenticated session
-- Step 2: Requesting cross-app ID-JAG for Gateway with resource Salesforce
-- Step 3: Trading ID-JAG for Okta Relay Access Token
-- Step 4: Querying Salesforce via Gateway or error details
+The tool returns a formatted message with:
+- Step 1: Web ID Token retrieval
+- Step 2: Cross-app ID-JAG request
+- Step 3: Okta Relay Access Token exchange
+- Step 4: Salesforce query results or errors
 
-If the tool returns an error (success: false):
-- Display the complete error message to the user
-- If it's a gateway configuration error (HTML response), explain that the gateway URL needs to be configured correctly
-- If it's a federation error, explain the connected account flow is needed
-- Always show all the steps that were completed before the error occurred
+YOU MUST show the user the complete tool result message. Do not summarize or skip any steps.
 
-Format your response to be clear and helpful, showing the user exactly what happened at each step.`,
+If there's an error, show the user exactly what went wrong and at which step.`,
       messages: coreMessages,
       tools,
       maxTokens: 4000,
       maxSteps: 15,
       experimental_continueSteps: true,
-      onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {
+      onStepFinish: async ({ text, toolCalls, toolResults, finishReason }) => {
         console.log(`[v0] ===== STEP FINISHED =====`)
         console.log(`[v0] Finish reason: ${finishReason}`)
         console.log(`[v0] Text generated: "${text}"`)
@@ -339,14 +335,12 @@ Format your response to be clear and helpful, showing the user exactly what happ
         if (toolResults && toolResults.length > 0) {
           toolResults.forEach((result, index) => {
             console.log(`[v0] Tool ${index + 1} result type:`, typeof result.result)
-            if (result.result) {
-              if (typeof result.result === "object") {
-                console.log(`[v0] Result object keys:`, Object.keys(result.result))
-                console.log(`[v0] Result success:`, result.result.success)
-                console.log(`[v0] Result message preview:`, result.result.message?.substring(0, 200))
-              } else {
-                console.log(`[v0] Result:`, result.result)
-              }
+            if (result.result !== undefined && result.result !== null) {
+              const resultStr = String(result.result)
+              console.log(`[v0] Tool ${index + 1} result length:`, resultStr.length)
+              console.log(`[v0] Tool ${index + 1} result preview:`, resultStr.substring(0, 300))
+            } else {
+              console.log(`[v0] Tool ${index + 1} result is undefined or null!`)
             }
           })
         }
@@ -355,7 +349,7 @@ Format your response to be clear and helpful, showing the user exactly what happ
 
     console.log(`[v0] Streaming response to client`)
 
-    return result.toUIMessageStreamResponse()
+    return result.toDataStreamResponse()
   } catch (error) {
     console.error(`[v0] ===== AGENT CHAT ERROR =====`)
     console.error(`[v0] Error:`, error)
