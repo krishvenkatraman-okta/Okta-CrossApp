@@ -25,9 +25,12 @@ export default function AgentPage() {
 
   const [inputValue, setInputValue] = useState("")
 
-  const { messages, isLoading, append, setMessages } = useChat({
+  const chatHook = useChat({
     api: "/api/agent/chat",
   })
+
+  const { messages, isLoading, setMessages } = chatHook
+  const appendMessage = chatHook.append
 
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
@@ -116,7 +119,7 @@ export default function AgentPage() {
     setAuthenticated(false)
   }
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const trimmedInput = inputValue.trim()
@@ -124,17 +127,19 @@ export default function AgentPage() {
       return
     }
 
-    // Append the message
-    append({
-      role: "user",
-      content: trimmedInput,
-    })
-      .then(() => {
+    try {
+      if (appendMessage && typeof appendMessage === "function") {
+        await appendMessage({
+          role: "user",
+          content: trimmedInput,
+        })
         setInputValue("")
-      })
-      .catch((error) => {
-        console.error("[v0] Error sending message:", error)
-      })
+      } else {
+        console.error("[v0] append function not available")
+      }
+    } catch (error) {
+      console.error("[v0] Error sending message:", error)
+    }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,21 +179,23 @@ export default function AgentPage() {
 
   const examplePrompts = ["Get Salesforce opportunities", "Show me financial data", "What are the latest sales leads?"]
 
-  const handlePromptClick = (prompt: string) => {
+  const handlePromptClick = async (prompt: string) => {
     if (isLoading) return
     setInputValue(prompt)
 
-    // Immediately append the message
-    append({
-      role: "user",
-      content: prompt,
-    })
-      .then(() => {
+    try {
+      if (appendMessage && typeof appendMessage === "function") {
+        await appendMessage({
+          role: "user",
+          content: prompt,
+        })
         setInputValue("")
-      })
-      .catch((error) => {
-        console.error("[v0] Error sending prompt:", error)
-      })
+      } else {
+        console.error("[v0] append function not available")
+      }
+    } catch (error) {
+      console.error("[v0] Error sending prompt:", error)
+    }
   }
 
   if (loading) {
