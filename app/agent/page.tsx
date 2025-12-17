@@ -117,16 +117,13 @@ export default function AgentPage() {
     setAuthenticated(false)
   }
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    console.log("[v0] Form submitted with input:", inputValue)
 
     if (!inputValue.trim() || isLoading) {
-      console.log("[v0] Submission blocked - empty input or loading")
       return
     }
 
-    console.log("[v0] Appending message to chat")
     append({
       role: "user",
       content: inputValue,
