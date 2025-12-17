@@ -14,7 +14,7 @@ This demo consists of three main applications:
 3. **KPI Resource Server** (`/kpi-server`) - Independent API for KPI metrics
 4. **API Documentation** (`/api-docs`) - Complete API reference and code examples
 
-\`\`\`
+```
 ┌─────────────────┐
 │   Agent App     │
 │                 │
@@ -51,7 +51,7 @@ This demo consists of three main applications:
 │ - Validates JAG  │          │ - Validates JAG  │
 │ - Returns Data   │          │ - Returns Data   │
 └──────────────────┘          └──────────────────┘
-\`\`\`
+```
 
 ## Quick Start
 
@@ -65,7 +65,7 @@ This demo consists of three main applications:
 
 ### Installation
 
-\`\`\`bash
+```bash
 # Clone the repository
 git clone https://github.com/your-org/okta-cross-app-access.git
 cd okta-cross-app-access
@@ -78,7 +78,7 @@ cp .env.example .env.local
 
 # Run the development server
 npm run dev
-\`\`\`
+```
 
 The application will be available at `http://localhost:3000`
 
@@ -86,7 +86,7 @@ The application will be available at `http://localhost:3000`
 
 ### Required Variables
 
-\`\`\`bash
+```bash
 # Okta Org Configuration (Server-side only)
 OKTA_CLIENT_ID=your_client_id              # Used for server-side token exchange
 OKTA_CLIENT_SECRET=your_client_secret      # Used for server-side authentication
@@ -101,7 +101,7 @@ NEXT_PUBLIC_OKTA_CLIENT_ID=your_client_id  # Same as OKTA_CLIENT_ID, needed for 
 NEXT_PUBLIC_REDIRECT_URI=https://your-domain.vercel.app/auth/callback
 NEXT_PUBLIC_OKTA_ORG_DOMAIN=https://your-org.okta.com
 NEXT_PUBLIC_OKTA_AUTH_SERVER_ISSUER=https://your-org.okta.com/oauth2/your_auth_server_id
-\`\`\`
+```
 
 ### Why NEXT_PUBLIC_ Variables?
 
@@ -187,7 +187,7 @@ Complete API reference with code examples and authentication flows.
 ### Authentication Flow
 
 1. **User Login**
-   \`\`\`
+   ```
    GET /oauth2/v1/authorize
    - response_type: code
    - client_id: <AGENT_CLIENT_ID>
@@ -196,10 +196,10 @@ Complete API reference with code examples and authentication flows.
    - state: <random_state>
    - code_challenge: <PKCE_challenge>
    - code_challenge_method: S256
-   \`\`\`
+   ```
 
 2. **Token Exchange (ID Token → ID-JAG)**
-   \`\`\`
+   ```
    POST /oauth2/v1/token
    - grant_type: urn:ietf:params:oauth:grant-type:token-exchange
    - subject_token: <ID_TOKEN>
@@ -208,19 +208,19 @@ Complete API reference with code examples and authentication flows.
    - scope: mcp:read
    - client_assertion_type: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
    - client_assertion: <JWT_CLIENT_ASSERTION>
-   \`\`\`
+   ```
 
 3. **Access Resource API**
-   \`\`\`
+   ```
    GET /api/resource/financial
    Headers:
    - Authorization: Bearer <ID-JAG-TOKEN>
-   \`\`\`
+   ```
 
 ### Resource API Endpoints
 
 #### Financial Data
-\`\`\`
+```
 GET /api/resource/financial
 Authorization: Bearer <ID-JAG-TOKEN>
 
@@ -237,10 +237,10 @@ Response:
     }
   ]
 }
-\`\`\`
+```
 
 #### KPI Metrics
-\`\`\`
+```
 GET /api/resource/kpi
 Authorization: Bearer <ID-JAG-TOKEN>
 
@@ -258,16 +258,16 @@ Response:
     }
   ]
 }
-\`\`\`
+```
 
 ### Error Responses
 
-\`\`\`json
+```json
 {
   "error": "invalid_token",
   "error_description": "Token validation failed: Invalid signature"
 }
-\`\`\`
+```
 
 **Common Error Codes:**
 - `401 Unauthorized` - Missing or invalid token
@@ -293,7 +293,7 @@ Resource servers validate ID-JAG tokens by:
 
 ### JavaScript (Fetch API)
 
-\`\`\`javascript
+```javascript
 // Exchange ID token for ID-JAG token
 const response = await fetch('/api/token-exchange', {
   method: 'POST',
@@ -312,11 +312,11 @@ const data = await fetch('/api/resource/financial', {
 });
 
 const financialData = await data.json();
-\`\`\`
+```
 
 ### cURL
 
-\`\`\`bash
+```bash
 # Exchange token
 curl -X POST https://your-domain.vercel.app/api/token-exchange \
   -H "Content-Type: application/json" \
@@ -325,11 +325,11 @@ curl -X POST https://your-domain.vercel.app/api/token-exchange \
 # Call resource API
 curl https://your-domain.vercel.app/api/resource/financial \
   -H "Authorization: Bearer your-id-jag-token"
-\`\`\`
+```
 
 ### Python
 
-\`\`\`python
+```python
 import requests
 
 # Exchange token
@@ -346,7 +346,7 @@ data = requests.get(
     headers=headers
 )
 print(data.json())
-\`\`\`
+```
 
 ## Okta Configuration
 
@@ -378,7 +378,7 @@ print(data.json())
 
 ### Deploy to Vercel
 
-\`\`\`bash
+```bash
 # Install Vercel CLI
 npm i -g vercel
 
@@ -387,7 +387,7 @@ vercel
 
 # Set environment variables in Vercel Dashboard
 # Settings → Environment Variables
-\`\`\`
+```
 
 **Important:** Update `NEXT_PUBLIC_REDIRECT_URI` to your production URL.
 
@@ -405,7 +405,7 @@ Ensure all environment variables are configured in your deployment platform.
 
 ### Project Structure
 
-\`\`\`
+```
 ├── app/
 │   ├── api/
 │   │   ├── auth/callback/     # OAuth callback handler
@@ -425,27 +425,27 @@ Ensure all environment variables are configured in your deployment platform.
 │   ├── resource-client.ts       # API client
 │   └── okta-config.ts          # Configuration
 └── README.md
-\`\`\`
+```
 
 ### Running Tests
 
-\`\`\`bash
+```bash
 # Run all tests
 npm test
 
 # Run with coverage
 npm run test:coverage
-\`\`\`
+```
 
 ### Building for Production
 
-\`\`\`bash
+```bash
 # Create production build
 npm run build
 
 # Start production server
 npm start
-\`\`\`
+```
 
 ## Troubleshooting
 
@@ -473,13 +473,13 @@ npm start
 
 Enable debug logs by checking the browser console and server logs:
 
-\`\`\`bash
+```bash
 # Server logs show:
 [v0] Token endpoint: ...
 [v0] Creating JWT with audience: ...
 [v0] JWT structure: ...
 [v0] Token validation succeeded
-\`\`\`
+```
 
 ## Security Considerations
 

@@ -119,7 +119,7 @@ function ConnectCallbackContent() {
             console.log("[v0] Connection completed, notifying parent window")
             window.opener.postMessage(
               {
-                type: "connected_account_complete",
+                type: "salesforce-connected",
                 connectCode,
                 success: true,
               },

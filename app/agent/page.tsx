@@ -1,21 +1,15 @@
 "use client"
 
+import type React from "react"
+
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport, UIMessage } from "ai"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Shield, Send, Loader2, CheckCircle2, XCircle } from "@/components/icons"
+import { Shield, Send, Loader2, XCircle } from "@/components/icons"
 import { isWebAuthenticated, clearWebTokens } from "@/lib/web-auth-client"
 import { LoginButton } from "@/components/login-button"
-import {
-  GATEWAY_CONFIG,
-  makeGatewayRequestWithFallback,
-  completeConnectedAccount,
-  type ConnectedAccountResponse,
-} from "@/lib/gateway-client"
-import { getSalesforceAuth0AccessToken, getAuth0AccessToken } from "@/lib/resource-client"
 import { tokenStore } from "@/lib/token-store"
 import { TokenPanel } from "@/components/token-panel"
 
@@ -23,7 +17,8 @@ export default function AgentPage() {
   const [authenticated, setAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState("")
-  const [showTokens, setShowTokens] = useState(false)
+  const [showTokens, setShowTokens] = useState(true)
+  const [connectedAccount, setConnectedAccount] = useState<string | null>(null)
   const [pendingConnection, setPendingConnection] = useState<{
     connectUri: string
     ticket: string
@@ -31,33 +26,31 @@ export default function AgentPage() {
   } | null>(null)
 
   const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/agent/chat" }),
+    api: "/api/agent/chat",
   })
 
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
     setLoading(false)
+    const savedConnectedAccount = sessionStorage.getItem("connectedSalesforceAccount")
+    if (savedConnectedAccount) {
+      setConnectedAccount(savedConnectedAccount)
+    }
   }, [])
 
   useEffect(() => {
-    messages.forEach((message) => {
-      if (message.role === "assistant") {
-        message.parts.forEach((part) => {
-          if (part.type === "text" && part.text) {
-            try {
-              const tokenMatch = part.text.match(/\[TOKENS\](.*?)\[\/TOKENS\]/s)
-              if (tokenMatch) {
-                const tokenData = JSON.parse(tokenMatch[1])
-                tokenStore.setTokensFromServerResponse(tokenData)
-              }
-            } catch (e) {
-              // Not token data, ignore
-            }
-          }
-        })
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "salesforce-connected") {
+        console.log("[v0] Salesforce account connected successfully")
+        setConnectedAccount("Salesforce")
+        sessionStorage.setItem("connectedSalesforceAccount", "Salesforce")
+        setPendingConnection(null)
       }
-    })
-  }, [messages])
+    }
+
+    window.addEventListener("message", handleMessage)
+    return () => window.removeEventListener("message", handleMessage)
+  }, [])
 
   useEffect(() => {
     messages.forEach((message) => {
@@ -66,8 +59,7 @@ export default function AgentPage() {
           if (part.type === "tool-result" && part.result) {
             const result = part.result as any
             console.log("[v0] Tool result received:", part.toolName, result)
-            
-            // Store tokens from tool execution with proper names
+
             if (result.tokens) {
               Object.entries(result.tokens).forEach(([key, value]) => {
                 if (typeof value === "string") {
@@ -76,28 +68,38 @@ export default function AgentPage() {
                 }
               })
             }
-            
+
             if (result.requiresConnection && result.connectUri) {
-              console.log('[v0] Agent detected connection required')
+              console.log("[v0] Agent detected connection required")
               setPendingConnection({
                 connectUri: result.connectUri,
                 ticket: result.ticket,
-                authSession: result.authSession
+                authSession: result.authSession,
               })
             }
-            
+
             if (result.authorizationUrl && result.sessionId) {
-              console.log('[v0] Agent initiated connected account flow')
-              
-              // Store session data
-              sessionStorage.setItem(`ca_session_${result.sessionId}`, JSON.stringify({
-                auth_session: result.authSession,
-                me_token: result.meAccessToken,
-                code_verifier: result.codeVerifier
-              }))
-              
-              // Open popup
-              window.open(result.authorizationUrl, "_blank", "width=600,height=700")
+              console.log("[v0] Agent initiated connected account flow")
+
+              sessionStorage.setItem(
+                `ca_session_${result.sessionId}`,
+                JSON.stringify({
+                  auth_session: result.authSession,
+                  me_token: result.meAccessToken,
+                  code_verifier: result.codeVerifier,
+                }),
+              )
+
+              const width = 600
+              const height = 700
+              const left = window.screenX + (window.outerWidth - width) / 2
+              const top = window.screenY + (window.outerHeight - height) / 2
+
+              window.open(
+                result.authorizationUrl,
+                "Connect Salesforce Account",
+                `width=${width},height=${height},left=${left},top=${top},popup=yes`,
+              )
             }
           }
         })
@@ -114,7 +116,7 @@ export default function AgentPage() {
     e.preventDefault()
     if (!input.trim() || status === "in_progress") return
 
-    sendMessage({ text: input })
+    sendMessage({ role: "user", content: input })
     setInput("")
   }
 
@@ -122,9 +124,32 @@ export default function AgentPage() {
     if (!pendingConnection) return
 
     const connectUrl = `${pendingConnection.connectUri}?ticket=${pendingConnection.ticket}`
-    window.open(connectUrl, "_blank", "width=600,height=700")
+
+    const width = 600
+    const height = 700
+    const left = window.screenX + (window.outerWidth - width) / 2
+    const top = window.screenY + (window.outerHeight - height) / 2
+
+    window.open(
+      connectUrl,
+      "Connect Salesforce Account",
+      `width=${width},height=${height},left=${left},top=${top},popup=yes`,
+    )
 
     sessionStorage.setItem("pendingAuthSession", pendingConnection.authSession)
+  }
+
+  const handleDeleteConnection = () => {
+    if (confirm("Are you sure you want to delete the Salesforce connected account?")) {
+      setConnectedAccount(null)
+      sessionStorage.removeItem("connectedSalesforceAccount")
+      Object.keys(sessionStorage).forEach((key) => {
+        if (key.startsWith("ca_session_")) {
+          sessionStorage.removeItem(key)
+        }
+      })
+      console.log("[v0] Salesforce connected account deleted")
+    }
   }
 
   if (loading) {
@@ -167,16 +192,29 @@ export default function AgentPage() {
             </div>
             <div>
               <h1 className="text-lg font-bold">AI Agent</h1>
-              <p className="text-xs text-muted-foreground">
-                {GATEWAY_CONFIG.enabled ? "Gateway Mode Active" : "Direct API Mode"}
-              </p>
+              <p className="text-xs text-muted-foreground">Direct API Mode</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {connectedAccount && (
+              <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5">
+                <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                  {connectedAccount} Connected
+                </span>
+                <Button
+                  onClick={handleDeleteConnection}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                >
+                  Delete
+                </Button>
+              </div>
+            )}
             <Button onClick={() => setShowTokens(!showTokens)} variant="outline" size="sm">
               {showTokens ? "Hide Tokens" : "Show Tokens"}
             </Button>
-            <Button onClick={handleLogout} variant="outline" className="gap-2">
+            <Button onClick={handleLogout} variant="outline" className="gap-2 bg-transparent">
               Sign Out
             </Button>
           </div>
@@ -221,70 +259,7 @@ export default function AgentPage() {
                               : "bg-secondary text-secondary-foreground"
                           }`}
                         >
-                          {message.parts.map((part, index) => {
-                            if (part.type === "text") {
-                              return (
-                                <p key={index} className="whitespace-pre-wrap">
-                                  {part.text}
-                                </p>
-                              )
-                            }
-                            if (part.type === "tool-result" && part.result) {
-                              const result = part.result as any
-                              
-                              // If result is a string, display it directly
-                              if (typeof result === 'string') {
-                                return (
-                                  <div key={index} className="mt-2 rounded border border-border bg-background/50 p-3">
-                                    <div className="mb-1 text-xs font-semibold opacity-70">
-                                      Result from {part.toolName}:
-                                    </div>
-                                    <pre className="whitespace-pre-wrap text-sm font-mono">
-                                      {result}
-                                    </pre>
-                                  </div>
-                                )
-                              }
-                              
-                              // If result is an object, format it nicely
-                              if (result.success !== undefined) {
-                                return (
-                                  <div key={index} className="mt-2 rounded border border-border bg-background/50 p-3">
-                                    <div className="mb-1 text-xs font-semibold opacity-70">
-                                      Result from {part.toolName}:
-                                    </div>
-                                    {result.success ? (
-                                      <div className="text-sm">
-                                        {result.message && <p className="mb-2">{result.message}</p>}
-                                        {result.data && (
-                                          <pre className="whitespace-pre-wrap font-mono text-xs">
-                                            {JSON.stringify(result.data, null, 2)}
-                                          </pre>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <p className="text-sm text-destructive">
-                                        {result.error || result.message || 'Operation failed'}
-                                      </p>
-                                    )}
-                                  </div>
-                                )
-                              }
-                              
-                              // Fallback: display as JSON
-                              return (
-                                <div key={index} className="mt-2 rounded border border-border bg-background/50 p-3">
-                                  <div className="mb-1 text-xs font-semibold opacity-70">
-                                    Result from {part.toolName}:
-                                  </div>
-                                  <pre className="whitespace-pre-wrap text-xs font-mono">
-                                    {JSON.stringify(result, null, 2)}
-                                  </pre>
-                                </div>
-                              )
-                            }
-                            return null
-                          })}
+                          {message.content && <p className="whitespace-pre-wrap">{message.content}</p>}
                         </div>
                       </div>
                     ))}
@@ -308,14 +283,18 @@ export default function AgentPage() {
                       className="flex-1"
                     />
                     <Button type="submit" disabled={status === "in_progress" || !input.trim()}>
-                      {status === "in_progress" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      {status === "in_progress" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </Button>
                   </form>
                 </div>
               </CardContent>
             </Card>
 
-            {pendingConnection && (
+            {pendingConnection && !connectedAccount && (
               <Card className="border-orange-500">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

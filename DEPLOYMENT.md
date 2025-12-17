@@ -14,7 +14,7 @@
 In the Vercel project settings, add all environment variables from `.env.example`:
 
 **Server-side Variables:**
-\`\`\`
+```
 OKTA_ORG_DOMAIN
 OKTA_CLIENT_ID
 OKTA_CLIENT_SECRET
@@ -22,15 +22,15 @@ OKTA_AUTH_SERVER_ISSUER
 OKTA_AGENT_PRINCIPAL_ID
 OKTA_PRIVATE_KEY_JWK
 OKTA_KEY_ID
-\`\`\`
+```
 
 **Client-side Variables (with NEXT_PUBLIC_ prefix):**
-\`\`\`
+```
 NEXT_PUBLIC_OKTA_CLIENT_ID
 NEXT_PUBLIC_REDIRECT_URI
 NEXT_PUBLIC_OKTA_ORG_DOMAIN
 NEXT_PUBLIC_OKTA_AUTH_SERVER_ISSUER
-\`\`\`
+```
 
 ### Step 3: Update Redirect URI
 
