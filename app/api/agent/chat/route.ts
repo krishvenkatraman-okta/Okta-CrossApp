@@ -273,19 +273,20 @@ function createTools(req: Request) {
 export async function POST(req: Request) {
   console.log(`[v0] ===== AGENT CHAT REQUEST RECEIVED =====`)
 
-  const { messages }: { messages: UIMessage[] } = await req.json()
-  console.log(`[v0] Message count: ${messages.length}`)
+  try {
+    const { messages }: { messages: UIMessage[] } = await req.json()
+    console.log(`[v0] Message count: ${messages.length}`)
+    console.log(`[v0] Latest message:`, messages[messages.length - 1])
 
-  const prompt = convertToModelMessages(messages)
-  const tools = createTools(req)
+    const prompt = convertToModelMessages(messages)
+    const tools = createTools(req)
 
-  console.log(`[v0] Tools created and ready`)
+    console.log(`[v0] Tools created and ready`)
+    console.log(`[v0] Calling Claude Sonnet 4 model...`)
 
-  console.log(`[v0] Calling Claude Sonnet 4 model...`)
-
-  const result = await streamText({
-    model: "anthropic/claude-sonnet-4",
-    system: `You are an AI agent that helps users access enterprise data through Okta cross-app access and Auth0 gateway.
+    const result = await streamText({
+      model: "anthropic/claude-sonnet-4",
+      system: `You are an AI agent that helps users access enterprise data through Okta cross-app access and Auth0 gateway.
 
 IMPORTANT: You MUST explain every step of what you're doing in detail. Be verbose and educational.
 
@@ -325,31 +326,56 @@ You need to complete a one-time consent flow to link your Salesforce account. Th
 - Enable future requests without re-authenticating
 
 Let me initiate the connection flow for you..."`,
-    messages: prompt,
-    tools,
-    maxTokens: 4000,
-    maxSteps: 15,
-    experimental_continueSteps: true,
-    onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {
-      console.log(`[v0] ===== STEP FINISHED =====`)
-      console.log(`[v0] Finish reason: ${finishReason}`)
-      console.log(`[v0] Text generated: "${text}"`)
-      console.log(`[v0] Tool results count: ${toolResults?.length || 0}`)
+      messages: prompt,
+      tools,
+      maxTokens: 4000,
+      maxSteps: 15,
+      experimental_continueSteps: true,
+      onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {
+        console.log(`[v0] ===== STEP FINISHED =====`)
+        console.log(`[v0] Finish reason: ${finishReason}`)
+        console.log(`[v0] Text generated: "${text}"`)
+        console.log(`[v0] Tool calls count: ${toolCalls?.length || 0}`)
+        console.log(`[v0] Tool results count: ${toolResults?.length || 0}`)
 
-      if (toolResults && toolResults.length > 0) {
-        toolResults.forEach((result, index) => {
-          console.log(`[v0] Tool ${index + 1} result type:`, typeof result.result)
-          if (typeof result.result === "string") {
-            console.log(`[v0] Result preview: ${result.result.substring(0, 200)}...`)
-          }
-        })
-      }
-    },
-  })
+        if (toolCalls && toolCalls.length > 0) {
+          toolCalls.forEach((call, index) => {
+            console.log(`[v0] Tool call ${index + 1}: ${call.toolName}`)
+          })
+        }
 
-  console.log(`[v0] Streaming response to client`)
+        if (toolResults && toolResults.length > 0) {
+          toolResults.forEach((result, index) => {
+            console.log(`[v0] Tool ${index + 1} result type:`, typeof result.result)
+            if (typeof result.result === "string") {
+              console.log(`[v0] Result preview: ${result.result.substring(0, 200)}...`)
+            } else {
+              console.log(`[v0] Result:`, result.result)
+            }
+          })
+        }
+      },
+    })
 
-  return result.toUIMessageStreamResponse()
+    console.log(`[v0] Streaming response to client`)
+
+    return result.toUIMessageStreamResponse()
+  } catch (error) {
+    console.error(`[v0] ===== AGENT CHAT ERROR =====`)
+    console.error(`[v0] Error:`, error)
+    console.error(`[v0] Error stack:`, error instanceof Error ? error.stack : "No stack trace")
+
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error occurred",
+        details: error instanceof Error ? error.stack : undefined,
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    )
+  }
 }
 
 async function exchangeForAuth0Token(idToken: string) {
