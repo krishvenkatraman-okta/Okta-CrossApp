@@ -155,10 +155,14 @@ function createTools(req: Request) {
 
         const resultMessage = `${steps.join("\n")}\n\n📊 Salesforce Query Results:\n\nFound ${records.length} ${objectName} records:\n\n${formattedRecords}`
 
+        console.log(`[v0] Tool result message length: ${resultMessage.length}`)
+        console.log(`[v0] Tool result preview:`, resultMessage.substring(0, 300))
+
         return resultMessage
       } catch (error) {
         console.error(`[v0] Query error:`, error)
         const errorMessage = `${steps.join("\n")}\n\n❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`
+        console.log(`[v0] Returning error message:`, errorMessage.substring(0, 200))
         return errorMessage
       }
     },
