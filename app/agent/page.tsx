@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useChat } from "@ai-sdk/react"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -16,7 +14,6 @@ import { TokenPanel } from "@/components/token-panel"
 export default function AgentPage() {
   const [authenticated, setAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [input, setInput] = useState("")
   const [showTokens, setShowTokens] = useState(true)
   const [connectedAccount, setConnectedAccount] = useState<string | null>(null)
   const [pendingConnection, setPendingConnection] = useState<{
@@ -25,7 +22,7 @@ export default function AgentPage() {
     authSession: string
   } | null>(null)
 
-  const { messages, append, status } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: "/api/agent/chat",
   })
 
@@ -55,10 +52,10 @@ export default function AgentPage() {
   useEffect(() => {
     messages.forEach((message) => {
       if (message.role === "assistant") {
-        message.parts.forEach((part) => {
-          if (part.type === "tool-result" && part.result) {
-            const result = part.result as any
-            console.log("[v0] Tool result received:", part.toolName, result)
+        message.toolInvocations?.forEach((toolInvocation) => {
+          if (toolInvocation.state === "result" && toolInvocation.result) {
+            const result = toolInvocation.result as any
+            console.log("[v0] Tool result received:", toolInvocation.toolName, result)
 
             if (result.tokens) {
               Object.entries(result.tokens).forEach(([key, value]) => {
@@ -110,14 +107,6 @@ export default function AgentPage() {
   const handleLogout = () => {
     clearWebTokens()
     setAuthenticated(false)
-  }
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || status === "in_progress") return
-
-    await append({ role: "user", content: input })
-    setInput("")
   }
 
   const handleConnectAccount = () => {
@@ -297,7 +286,7 @@ export default function AgentPage() {
                       </div>
                     ))}
 
-                    {status === "in_progress" && (
+                    {isLoading && (
                       <div className="flex justify-start">
                         <div className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-secondary-foreground">
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -307,20 +296,16 @@ export default function AgentPage() {
                     )}
                   </div>
 
-                  <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <form onSubmit={handleSubmit} className="flex gap-2">
                     <Input
                       value={input}
-                      onChange={(e) => setInput(e.target.value)}
+                      onChange={handleInputChange}
                       placeholder="Ask the agent to retrieve data..."
-                      disabled={status === "in_progress"}
+                      disabled={isLoading}
                       className="flex-1"
                     />
-                    <Button type="submit" disabled={status === "in_progress" || !input.trim()}>
-                      {status === "in_progress" ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
+                    <Button type="submit" disabled={isLoading || !input.trim()}>
+                      {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     </Button>
                   </form>
                 </div>

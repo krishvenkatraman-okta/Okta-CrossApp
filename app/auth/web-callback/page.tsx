@@ -26,7 +26,7 @@ export default function WebAuthCallback() {
 
         storeWebTokens(tokens)
 
-        router.push("/")
+        router.push("/agent")
       } catch (err) {
         console.error("Web auth callback error:", err)
         setError(err instanceof Error ? err.message : "Authentication failed")
