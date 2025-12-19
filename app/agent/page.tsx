@@ -31,6 +31,10 @@ export default function AgentPage() {
   const [userInfo, setUserInfo] = useState<{ name?: string; email?: string } | null>(null)
   const [pendingRetry, setPendingRetry] = useState<string | null>(null)
 
+  const [needsConnection, setNeedsConnection] = useState(false)
+  const [connectedAccounts, setConnectedAccounts] = useState<Array<{ id: string; connection: string }>>([])
+  const [loadingAccounts, setLoadingAccounts] = useState(false)
+
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
     setLoading(false)
@@ -56,6 +60,8 @@ export default function AgentPage() {
         console.error("[v0] Error decoding token:", error)
       }
     }
+
+    loadConnectedAccounts()
   }, [])
 
   useEffect(() => {
@@ -157,6 +163,7 @@ export default function AgentPage() {
     setMessages(messagesWithUser)
     setIsLoading(true)
     setInputValue("")
+    setNeedsConnection(false)
 
     try {
       console.log("[v0] Sending message to agent API")
@@ -194,8 +201,21 @@ export default function AgentPage() {
           }
         }
 
-        // Update the assistant message with the result
-        setMessages((prev) => prev.map((msg) => (msg.id === userMessage.id ? { ...msg, content: data.result } : msg)))
+        if (data.requiresConnection) {
+          console.log("[v0] Connection required - showing connect button")
+          setNeedsConnection(true)
+          setPendingRetry(content) // Save the original query to retry after connection
+        }
+
+        // Add assistant message with the result
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: data.result,
+          },
+        ])
         return
       }
 
@@ -240,34 +260,101 @@ export default function AgentPage() {
     setInputValue(e.target.value)
   }
 
-  const handleConnectAccount = () => {
-    if (!pendingConnection) return
+  const loadConnectedAccounts = async () => {
+    setLoadingAccounts(true)
+    try {
+      const response = await fetch("/api/gateway-test/list-connected-accounts")
+      if (response.ok) {
+        const data = await response.json()
+        setConnectedAccounts(data.connections || [])
 
-    const connectUrl = `${pendingConnection.connectUri}?ticket=${pendingConnection.ticket}`
-
-    const width = 600
-    const height = 700
-    const left = window.screenX + (window.outerWidth - width) / 2
-    const top = window.screenY + (window.outerHeight - height) / 2
-
-    window.open(
-      connectUrl,
-      "Connect Salesforce Account",
-      `width=${width},height=${height},left=${left},top=${top},popup=yes`,
-    )
-
-    sessionStorage.setItem("pendingAuthSession", pendingConnection.authSession)
+        // Update connectedAccount state if Salesforce is connected
+        const salesforceConnection = data.connections?.find((c: any) =>
+          c.connection?.toLowerCase().includes("salesforce"),
+        )
+        if (salesforceConnection) {
+          setConnectedAccount("Salesforce")
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error loading connected accounts:", error)
+    } finally {
+      setLoadingAccounts(false)
+    }
   }
 
-  const handleDeleteConnection = () => {
-    if (confirm("Are you sure you want to delete the Salesforce connected account?")) {
+  const handleConnectAccount = async () => {
+    console.log("[v0] Initiating Salesforce connection flow")
+
+    try {
+      const response = await fetch("/api/gateway-test/connect-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          connection: "Salesforce",
+          redirectUri: `${window.location.origin}/agent/connect-callback`,
+          scopes: ["openid", "profile"],
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to initiate connection")
+      }
+
+      const data = await response.json()
+
+      // Store session info
+      sessionStorage.setItem(
+        `ca_session_${data.authSession}`,
+        JSON.stringify({
+          auth_session: data.authSession,
+          code_verifier: data.codeVerifier,
+        }),
+      )
+
+      // Open connection window
+      const connectUrl = `${data.connectUri}?ticket=${data.ticket}`
+      const width = 600
+      const height = 700
+      const left = window.screenX + (window.outerWidth - width) / 2
+      const top = window.screenY + (window.outerHeight - height) / 2
+
+      window.open(
+        connectUrl,
+        "Connect Salesforce Account",
+        `width=${width},height=${height},left=${left},top=${top},popup=yes`,
+      )
+    } catch (error) {
+      console.error("[v0] Error connecting account:", error)
+      alert("Failed to initiate connection. Please try again.")
+    }
+  }
+
+  const handleDeleteConnection = async (connectionId: string) => {
+    if (!confirm("Are you sure you want to delete this connected account?")) {
+      return
+    }
+
+    try {
+      const response = await fetch("/api/gateway-test/delete-connected-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionId }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete connection")
+      }
+
+      // Refresh the list
+      await loadConnectedAccounts()
+
+      // Clear local state
       setConnectedAccount(null)
       sessionStorage.removeItem("connectedSalesforceAccount")
-      Object.keys(sessionStorage).forEach((key) => {
-        if (key.startsWith("ca_session_")) {
-          sessionStorage.removeItem(key)
-        }
-      })
+    } catch (error) {
+      console.error("[v0] Error deleting connection:", error)
+      alert("Failed to delete connection. Please try again.")
     }
   }
 
@@ -326,21 +413,6 @@ export default function AgentPage() {
             {userInfo && (
               <div className="flex items-center gap-2 rounded-lg border bg-muted px-3 py-1.5">
                 <span className="text-sm font-medium">Welcome, {userInfo.name || userInfo.email}</span>
-              </div>
-            )}
-            {connectedAccount && (
-              <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5">
-                <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                  {connectedAccount} Connected
-                </span>
-                <Button
-                  onClick={handleDeleteConnection}
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-xs text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  Delete
-                </Button>
               </div>
             )}
             <Button onClick={() => setShowTokens(!showTokens)} variant="outline" size="sm">
@@ -404,35 +476,6 @@ export default function AgentPage() {
                               <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
                             </div>
                           )}
-
-                          {message.toolInvocations?.map((toolInvocation, index) => (
-                            <div key={index} className="mt-2 space-y-2">
-                              {toolInvocation.state === "result" && (
-                                <div className="rounded border bg-muted/50 p-3">
-                                  <div className="mb-1 text-xs font-semibold text-muted-foreground">
-                                    Tool: {toolInvocation.toolName}
-                                  </div>
-                                  <div className="text-sm">
-                                    {typeof toolInvocation.result === "string" ? (
-                                      <pre className="whitespace-pre-wrap font-mono text-xs">
-                                        {toolInvocation.result}
-                                      </pre>
-                                    ) : (
-                                      <pre className="whitespace-pre-wrap font-mono text-xs">
-                                        {JSON.stringify(toolInvocation.result, null, 2)}
-                                      </pre>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                              {toolInvocation.state === "call" && (
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                  <span>Calling {toolInvocation.toolName}...</span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
                         </div>
                       </div>
                     ))}
@@ -465,21 +508,54 @@ export default function AgentPage() {
               </CardContent>
             </Card>
 
-            {showConnectAccount && !connectedAccount && (
+            {needsConnection && (
               <Card className="border-orange-500">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <XCircle className="h-5 w-5 text-orange-500" />
-                    Connected Account Required
+                    Salesforce Account Connection Required
                   </CardTitle>
                   <CardDescription>
-                    The gateway needs access to your Salesforce account. Click below to connect.
+                    The Gateway needs to connect to your Salesforce account to retrieve data. Click below to authorize
+                    access.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Button onClick={handleConnectAccount} className="w-full">
                     Connect Salesforce Account
                   </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {connectedAccounts.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Connected Accounts</CardTitle>
+                  <CardDescription>Manage your connected enterprise accounts</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {connectedAccounts.map((account) => (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between rounded-lg border bg-muted/50 p-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-green-500" />
+                          <span className="font-medium">{account.connection}</span>
+                        </div>
+                        <Button
+                          onClick={() => handleDeleteConnection(account.id)}
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:bg-red-100 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}
