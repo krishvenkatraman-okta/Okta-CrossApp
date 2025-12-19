@@ -27,6 +27,7 @@ export default function AgentPage() {
 
   const [messages, setMessages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
 
   const [userInfo, setUserInfo] = useState<{ name?: string; email?: string } | null>(null)
   const [pendingRetry, setPendingRetry] = useState<string | null>(null)
@@ -34,6 +35,7 @@ export default function AgentPage() {
   const [needsConnection, setNeedsConnection] = useState(false)
   const [connectedAccounts, setConnectedAccounts] = useState<Array<{ id: string; connection: string }>>([])
   const [loadingAccounts, setLoadingAccounts] = useState(false)
+  const [meAccessToken, setMeAccessToken] = useState<string | null>(null)
 
   useEffect(() => {
     setAuthenticated(isWebAuthenticated())
@@ -283,50 +285,151 @@ export default function AgentPage() {
     }
   }
 
+  const getMeAccessToken = async () => {
+    try {
+      console.log("[v0] Getting ME access token for connected account flow")
+
+      // Step 1: Get Web ID Token
+      const webIdToken = tokenStore.getToken("web_id_token")
+      if (!webIdToken) {
+        throw new Error("No Web ID Token available")
+      }
+
+      // Step 2: Exchange for ID-JAG for /me/ resource
+      const jagResponse = await fetch("/api/token-exchange/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ webIdToken }),
+      })
+
+      if (!jagResponse.ok) {
+        throw new Error("Failed to get ID-JAG for /me/")
+      }
+
+      const { idJagToken } = await jagResponse.json()
+      console.log("[v0] Received ID-JAG for /me/")
+
+      // Step 3: Trade ID-JAG for Auth0 /me/ access token
+      const auth0Response = await fetch("/api/gateway-test/me-auth0-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idJagToken }),
+      })
+
+      if (!auth0Response.ok) {
+        throw new Error("Failed to get Auth0 /me/ access token")
+      }
+
+      const { accessToken } = await auth0Response.json()
+      console.log("[v0] Received Auth0 /me/ access token")
+
+      setMeAccessToken(accessToken)
+      tokenStore.setToken("me_auth0_access_token", accessToken)
+
+      return accessToken
+    } catch (error) {
+      console.error("[v0] Failed to get ME access token:", error)
+      throw error
+    }
+  }
+
   const handleConnectAccount = async () => {
     console.log("[v0] Initiating Salesforce connection flow")
+    setIsConnecting(true)
 
     try {
+      // Get ME access token if we don't have it
+      const token = meAccessToken || (await getMeAccessToken())
+
+      if (!token) {
+        throw new Error("Failed to obtain ME access token")
+      }
+
+      // Generate session ID for this connection attempt
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`
+
       const response = await fetch("/api/gateway-test/connect-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          connection: "Salesforce",
-          redirectUri: `${window.location.origin}/agent/connect-callback`,
-          scopes: ["openid", "profile"],
+          meAccessToken: token,
+          sessionId: sessionId,
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to initiate connection")
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to initiate connection")
       }
 
       const data = await response.json()
+      console.log("[v0] Connection data received:", data)
 
-      // Store session info
+      // Store session info for callback
+      const sessionKey = `ca_session_${sessionId}`
       sessionStorage.setItem(
-        `ca_session_${data.authSession}`,
+        sessionKey,
         JSON.stringify({
-          auth_session: data.authSession,
-          code_verifier: data.codeVerifier,
+          authSession: data.auth_session,
+          meToken: token,
+          codeVerifier: data.code_verifier,
+          state: data.state,
         }),
       )
+      console.log("[v0] Stored session data with key:", sessionKey)
 
-      // Open connection window
-      const connectUrl = `${data.connectUri}?ticket=${data.ticket}`
+      // Open connection popup
+      const ticket = data.connect_params?.ticket || data.ticket
+      const connectUrl = ticket ? `${data.connect_uri}?ticket=${ticket}` : data.connect_uri
+
+      console.log("[v0] Opening connect URL:", connectUrl)
+
       const width = 600
       const height = 700
       const left = window.screenX + (window.outerWidth - width) / 2
       const top = window.screenY + (window.outerHeight - height) / 2
 
-      window.open(
+      const popup = window.open(
         connectUrl,
         "Connect Salesforce Account",
         `width=${width},height=${height},left=${left},top=${top},popup=yes`,
       )
+
+      if (!popup) {
+        throw new Error("Popup blocked. Please allow popups for this site.")
+      }
+
+      // Listen for completion message from callback
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.type === "connected_account_complete") {
+          console.log("[v0] Connected account callback received")
+          window.removeEventListener("message", handleMessage)
+          popup?.close()
+          setIsConnecting(false)
+          setNeedsConnection(false)
+
+          // Refresh connected accounts list
+          loadConnectedAccounts()
+
+          alert("Salesforce account connected successfully! You can now retry your query.")
+        }
+      }
+
+      window.addEventListener("message", handleMessage)
+
+      // Check if popup is closed
+      const checkClosed = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(checkClosed)
+          window.removeEventListener("message", handleMessage)
+          setIsConnecting(false)
+          console.log("[v0] Popup closed")
+        }
+      }, 500)
     } catch (error) {
       console.error("[v0] Error connecting account:", error)
-      alert("Failed to initiate connection. Please try again.")
+      setIsConnecting(false)
+      alert(`Failed to initiate connection: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
   }
 
