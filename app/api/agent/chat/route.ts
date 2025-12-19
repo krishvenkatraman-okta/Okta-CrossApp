@@ -8,7 +8,7 @@ async function querySalesforceData(
   objectName: string,
   fields: string[],
   whereClause?: string,
-): Promise<{ result: string; tokens: Record<string, string> }> {
+): Promise<{ result: string; tokens: Record<string, string>; requiresConnection?: boolean }> {
   const steps: string[] = []
   const tokens: Record<string, string> = {}
 
@@ -106,6 +106,29 @@ async function querySalesforceData(
 
     const data = await response.json()
 
+    if (data.error === "federated_connection_refresh_token_not_found") {
+      steps.push("")
+      steps.push(`⚠️ Step 6: Federated Account Not Found`)
+      steps.push(`   The Gateway could not find a connected Salesforce account for your Auth0 identity.`)
+      steps.push("")
+      steps.push(`📋 To connect your Salesforce account:`)
+      steps.push(`   1. You need to initiate the connected account flow`)
+      steps.push(`   2. This requires getting an Auth0 /me/ API access token`)
+      steps.push(`   3. Then calling the /me/v1/connected-accounts/connect endpoint`)
+      steps.push(`   4. Finally, completing the OAuth flow with Salesforce`)
+      steps.push("")
+      steps.push(`🔗 Next Steps:`)
+      steps.push(`   - Click the "Connect Salesforce Account" button to start the connection flow`)
+      steps.push(`   - You will be redirected to Salesforce to authorize access`)
+      steps.push(`   - After authorization, you can retry your query`)
+
+      return {
+        result: `${steps.join("\n")}\n\n⚠️ Please connect your Salesforce account to continue.`,
+        tokens,
+        requiresConnection: true,
+      }
+    }
+
     steps.push("")
     steps.push(`✅ Step 6: Received response from Egress Okta Relay (Gateway)`)
     steps.push(`   Retrieved ${data.records?.length || 0} Opportunity records from Salesforce`)
@@ -151,7 +174,7 @@ export async function POST(req: Request) {
     if (userMessage.includes("salesforce") && userMessage.includes("opportunit")) {
       console.log(`[v0] Detected Salesforce opportunity query - executing directly`)
 
-      const { result, tokens } = await querySalesforceData(req, "Opportunity", [
+      const { result, tokens, requiresConnection } = await querySalesforceData(req, "Opportunity", [
         "Id",
         "Name",
         "Amount",
@@ -162,6 +185,14 @@ export async function POST(req: Request) {
 
       console.log(`[v0] Query result length: ${result.length}`)
       console.log(`[v0] Tokens collected: ${Object.keys(tokens).join(", ")}`)
+
+      if (requiresConnection) {
+        return new Response(JSON.stringify({ result, tokens, requiresConnection }), {
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+          },
+        })
+      }
 
       return new Response(JSON.stringify({ result, tokens }), {
         headers: {
