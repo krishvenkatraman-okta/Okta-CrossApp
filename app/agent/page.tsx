@@ -20,6 +20,8 @@ export default function AgentPage() {
     connectUri: string
     ticket: string
     authSession: string
+    popup?: Window | null
+    sessionId?: string
   } | null>(null)
   const [showConnectAccount, setShowConnectAccount] = useState(false)
 
@@ -347,7 +349,6 @@ export default function AgentPage() {
     setIsConnecting(true)
 
     try {
-      // Get ME access token
       const token = await getMeAccessToken()
 
       if (!token) {
@@ -372,13 +373,15 @@ export default function AgentPage() {
       console.log("[v0] Connection data received:", data)
 
       const sessionId = Date.now().toString()
-      sessionStorage.setItem(`connect_session_${sessionId}_auth_session`, data.auth_session)
-      sessionStorage.setItem(`connect_session_${sessionId}_me_token`, token)
-      sessionStorage.setItem(`connect_session_${sessionId}_code_verifier`, data.code_verifier)
+      const sessionData = {
+        authSession: data.auth_session,
+        meToken: token,
+        codeVerifier: data.code_verifier,
+      }
 
+      sessionStorage.setItem(`ca_session_${sessionId}`, JSON.stringify(sessionData))
       console.log("[v0] Session data stored with ID:", sessionId)
 
-      // Open connection popup
       const ticket = data.connect_params?.ticket || data.ticket
       const connectUrl = ticket ? `${data.connect_uri}?ticket=${ticket}` : data.connect_uri
 
@@ -391,41 +394,13 @@ export default function AgentPage() {
 
       const popup = window.open(
         connectUrl,
-        "Connect Salesforce Account",
-        `width=${width},height=${height},left=${left},top=${top},popup=yes`,
+        "Connect Salesforce",
+        `width=${width},height=${height},left=${left},top=${top}`,
       )
 
-      if (!popup) {
-        throw new Error("Popup blocked. Please allow popups for this site.")
+      if (popup) {
+        setPendingConnection({ connectUri: "", ticket: "", authSession: "", popup, sessionId })
       }
-
-      // Listen for completion message from callback
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data.type === "connected_account_complete") {
-          console.log("[v0] Connected account callback received")
-          window.removeEventListener("message", handleMessage)
-          popup?.close()
-          setIsConnecting(false)
-          setNeedsConnection(false)
-
-          // Refresh connected accounts list
-          loadConnectedAccounts()
-
-          alert("Salesforce account connected successfully! You can now retry your query.")
-        }
-      }
-
-      window.addEventListener("message", handleMessage)
-
-      // Check if popup is closed
-      const checkClosed = setInterval(() => {
-        if (popup?.closed) {
-          clearInterval(checkClosed)
-          window.removeEventListener("message", handleMessage)
-          setIsConnecting(false)
-          console.log("[v0] Popup closed")
-        }
-      }, 500)
     } catch (error) {
       console.error("[v0] Error connecting account:", error)
       setIsConnecting(false)

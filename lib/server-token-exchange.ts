@@ -10,7 +10,6 @@ interface TokenExchangeResult {
   accessToken: string
 }
 
-
 /**
  * Request ID-JAG token from Okta
  */
@@ -18,7 +17,7 @@ export async function requestIdJag(idToken: string, resource: string, audience: 
   console.log("[v0] Requesting ID-JAG from Okta")
   console.log("[v0] - Resource:", resource)
   console.log("[v0] - Audience:", audience)
-  
+
   const jagRequestBody = new URLSearchParams({
     grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
     requested_token_type: "urn:ietf:params:oauth:token-type:id-jag",
@@ -30,11 +29,21 @@ export async function requestIdJag(idToken: string, resource: string, audience: 
     client_secret: process.env.OKTA_REQUESTING_APP_CLIENT_SECRET!,
   })
 
+  console.log("[v0] Request details:")
+  console.log("[v0]   - Endpoint:", OKTA_WEB_ENDPOINTS.token)
+  console.log("[v0]   - grant_type:", "urn:ietf:params:oauth:grant-type:token-exchange")
+  console.log("[v0]   - requested_token_type:", "urn:ietf:params:oauth:token-type:id-jag")
+  console.log("[v0]   - subject_token_type:", "urn:ietf:params:oauth:token-type:id_token")
+  console.log("[v0]   - subject_token (ID Token):", idToken.substring(0, 50) + "...")
+  console.log("[v0]   - client_id:", process.env.OKTA_REQUESTING_APP_CLIENT_ID?.substring(0, 20) + "...")
+
   const jagResponse = await fetch(OKTA_WEB_ENDPOINTS.token, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: jagRequestBody,
   })
+
+  console.log("[v0] Response status:", jagResponse.status)
 
   if (!jagResponse.ok) {
     const errorText = await jagResponse.text()
@@ -43,8 +52,9 @@ export async function requestIdJag(idToken: string, resource: string, audience: 
   }
 
   const jagData = await jagResponse.json()
-  console.log("[v0] ID-JAG received")
-  
+  console.log("[v0] ID-JAG received successfully")
+  console.log("[v0]   - access_token (ID-JAG):", jagData.access_token.substring(0, 50) + "...")
+
   return jagData.access_token
 }
 
@@ -52,18 +62,18 @@ export async function requestIdJag(idToken: string, resource: string, audience: 
  * Exchange ID-JAG for Auth0 access token
  */
 export async function exchangeIdJagForAuth0Token(
-  idJag: string, 
+  idJag: string,
   tokenEndpoint: string,
   clientId: string,
   clientSecret: string,
   scope: string,
-  audience?: string
+  audience?: string,
 ): Promise<string> {
   console.log("[v0] Exchanging ID-JAG for Auth0 access token")
   console.log("[v0] - Token endpoint:", tokenEndpoint)
   console.log("[v0] - Scope:", scope)
-  console.log("[v0] - Audience:", audience || 'default')
-  
+  console.log("[v0] - Audience:", audience || "default")
+
   const requestParams: Record<string, string> = {
     grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
     assertion: idJag,
@@ -71,19 +81,19 @@ export async function exchangeIdJagForAuth0Token(
     client_secret: clientSecret,
     scope,
   }
-  
+
   // Add audience if provided (required for ME API)
   if (audience) {
     requestParams.audience = audience
   }
-  
+
   console.log("[v0] - Request body parameters:")
   console.log("[v0]   - grant_type:", requestParams.grant_type)
   console.log("[v0]   - scope:", requestParams.scope)
-  console.log("[v0]   - audience:", requestParams.audience || 'not set')
-  console.log("[v0]   - client_id:", clientId.substring(0, 20) + '...')
-  console.log("[v0]   - assertion:", idJag.substring(0, 50) + '...')
-  
+  console.log("[v0]   - audience:", requestParams.audience || "not set")
+  console.log("[v0]   - client_id:", clientId.substring(0, 20) + "...")
+  console.log("[v0]   - assertion:", idJag.substring(0, 50) + "...")
+
   const auth0RequestBody = new URLSearchParams(requestParams)
 
   const auth0Response = await fetch(tokenEndpoint, {
@@ -100,11 +110,11 @@ export async function exchangeIdJagForAuth0Token(
 
   const auth0Data = await auth0Response.json()
   console.log("[v0] Auth0 access token received")
-  console.log("[v0] - Token preview:", auth0Data.access_token.substring(0, 50) + '...')
+  console.log("[v0] - Token preview:", auth0Data.access_token.substring(0, 50) + "...")
   if (auth0Data.scope) {
     console.log("[v0] - Granted scope:", auth0Data.scope)
   }
-  
+
   return auth0Data.access_token
 }
 
@@ -119,15 +129,21 @@ export async function exchangeForAuth0Token(idToken: string): Promise<TokenExcha
   try {
     // Step 1: Get ID-JAG from Okta
     console.log("[v0] Step 1: Requesting ID-JAG from Okta")
-    
+
     const idJag = await requestIdJag(idToken, process.env.FINANCE_RESOURCE!, process.env.AUTH0_AUDIENCE!)
 
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
-    
+
     const scope = process.env.FINANCE_SCOPE || "finance:read"
-    
-    const accessToken = await exchangeIdJagForAuth0Token(idJag, process.env.AUTH0_TOKEN_ENDPOINT!, process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, scope)
+
+    const accessToken = await exchangeIdJagForAuth0Token(
+      idJag,
+      process.env.AUTH0_TOKEN_ENDPOINT!,
+      process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
+      process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
+      scope,
+    )
     console.log("[v0] Step 2 ✓: Auth0 access token received")
     console.log("[v0] ===== AUTH0 TOKEN EXCHANGE (FINANCE) COMPLETED =====")
 
@@ -153,26 +169,26 @@ export async function exchangeForSalesforceAuth0Token(idToken: string): Promise<
   try {
     // Step 1: Get ID-JAG from Okta with Salesforce resource
     console.log("[v0] Step 1: Requesting ID-JAG from Okta with Salesforce resource")
-    
+
     const salesforceResource = process.env.SALESFORCE_DOMAIN || process.env.SALESFORCE_RESOURCE
     if (!salesforceResource) {
       throw new Error("SALESFORCE_DOMAIN environment variable is not set")
     }
-    
+
     const idJag = await requestIdJag(idToken, salesforceResource, process.env.AUTH0_AUDIENCE!)
 
     // Step 2: Exchange ID-JAG for Auth0 access token
     console.log("[v0] Step 2: Exchanging ID-JAG for Auth0 access token")
-    
+
     const scope = process.env.SALESFORCE_SCOPE || "salesforce:read"
-    
+
     const accessToken = await exchangeIdJagForAuth0Token(
-      idJag, 
-      process.env.AUTH0_TOKEN_ENDPOINT!, 
-      process.env.AUTH0_REQUESTING_APP_CLIENT_ID!, 
-      process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!, 
+      idJag,
+      process.env.AUTH0_TOKEN_ENDPOINT!,
+      process.env.AUTH0_REQUESTING_APP_CLIENT_ID!,
+      process.env.AUTH0_REQUESTING_APP_CLIENT_SECRET!,
       scope,
-      salesforceResource // Pass as audience
+      salesforceResource, // Pass as audience
     )
     console.log("[v0] Step 2 ✓: Auth0 access token received for Salesforce")
     console.log("[v0] ===== AUTH0 TOKEN EXCHANGE (SALESFORCE) COMPLETED =====")
@@ -193,9 +209,9 @@ export async function exchangeForSalesforceAuth0Token(idToken: string): Promise<
  */
 export function getIdTokenFromCookies(req: Request): string | null {
   console.log("[v0] ===== EXTRACTING ID TOKEN FROM COOKIES =====")
-  
+
   const cookieHeader = req.headers.get("cookie")
-  
+
   if (!cookieHeader) {
     console.log("[v0] No cookie header found in request")
     console.log("[v0] ===== ID TOKEN EXTRACTION FAILED =====")
@@ -214,7 +230,7 @@ export function getIdTokenFromCookies(req: Request): string | null {
   console.log("[v0] Available cookies:", Object.keys(cookies))
 
   const idToken = cookies["web_okta_id_token"]
-  
+
   if (!idToken) {
     console.log("[v0] web_okta_id_token cookie not found")
     console.log("[v0] ===== ID TOKEN EXTRACTION FAILED =====")
