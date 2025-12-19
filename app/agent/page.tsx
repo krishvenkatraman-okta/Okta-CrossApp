@@ -289,27 +289,34 @@ export default function AgentPage() {
     try {
       console.log("[v0] Getting ME access token for connected account flow")
 
-      // Step 1: Get Web ID Token
-      const webIdToken = tokenStore.getToken("web_id_token")
+      // Step 1: Get Web ID Token from session storage
+      const webIdToken = sessionStorage.getItem("web_okta_id_token")
       if (!webIdToken) {
-        throw new Error("No Web ID Token available")
+        throw new Error("No Web ID Token available. Please authenticate first.")
       }
 
-      // Step 2: Exchange for ID-JAG for /me/ resource
-      const jagResponse = await fetch("/api/token-exchange/me", {
+      console.log("[v0] Using Web ID Token from session storage")
+
+      // Step 2: Exchange Web ID Token for ME ID-JAG
+      console.log("[v0] Exchanging Web ID Token for ME ID-JAG")
+      const jagResponse = await fetch("/api/gateway-test/me-jag", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ webIdToken }),
+        body: JSON.stringify({ idToken: webIdToken }),
       })
 
       if (!jagResponse.ok) {
-        throw new Error("Failed to get ID-JAG for /me/")
+        const error = await jagResponse.json()
+        console.error("[v0] Failed to get ME ID-JAG:", error)
+        throw new Error(error.message || "Failed to get ID-JAG for /me/")
       }
 
       const { idJagToken } = await jagResponse.json()
-      console.log("[v0] Received ID-JAG for /me/")
+      console.log("[v0] Received ME ID-JAG")
+      tokenStore.setToken("me_id_jag_token", idJagToken)
 
-      // Step 3: Trade ID-JAG for Auth0 /me/ access token
+      // Step 3: Exchange ME ID-JAG for Auth0 /me/ access token
+      console.log("[v0] Exchanging ME ID-JAG for Auth0 /me/ access token")
       const auth0Response = await fetch("/api/gateway-test/me-auth0-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -317,7 +324,9 @@ export default function AgentPage() {
       })
 
       if (!auth0Response.ok) {
-        throw new Error("Failed to get Auth0 /me/ access token")
+        const error = await auth0Response.json()
+        console.error("[v0] Failed to get ME Auth0 access token:", error)
+        throw new Error(error.message || "Failed to get Auth0 /me/ access token")
       }
 
       const { accessToken } = await auth0Response.json()
@@ -338,45 +347,36 @@ export default function AgentPage() {
     setIsConnecting(true)
 
     try {
-      // Get ME access token if we don't have it
-      const token = meAccessToken || (await getMeAccessToken())
+      // Get ME access token
+      const token = await getMeAccessToken()
 
       if (!token) {
         throw new Error("Failed to obtain ME access token")
       }
-
-      // Generate session ID for this connection attempt
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`
 
       const response = await fetch("/api/gateway-test/connect-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           meAccessToken: token,
-          sessionId: sessionId,
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
+        console.error("[v0] Failed to initiate connection:", errorData)
         throw new Error(errorData.message || "Failed to initiate connection")
       }
 
       const data = await response.json()
       console.log("[v0] Connection data received:", data)
 
-      // Store session info for callback
-      const sessionKey = `ca_session_${sessionId}`
-      sessionStorage.setItem(
-        sessionKey,
-        JSON.stringify({
-          authSession: data.auth_session,
-          meToken: token,
-          codeVerifier: data.code_verifier,
-          state: data.state,
-        }),
-      )
-      console.log("[v0] Stored session data with key:", sessionKey)
+      const sessionId = Date.now().toString()
+      sessionStorage.setItem(`connect_session_${sessionId}_auth_session`, data.auth_session)
+      sessionStorage.setItem(`connect_session_${sessionId}_me_token`, token)
+      sessionStorage.setItem(`connect_session_${sessionId}_code_verifier`, data.code_verifier)
+
+      console.log("[v0] Session data stored with ID:", sessionId)
 
       // Open connection popup
       const ticket = data.connect_params?.ticket || data.ticket
