@@ -4,7 +4,6 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Bot,
   Send,
@@ -536,8 +535,8 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
   ]
 
   return (
-    <Card className="flex flex-col h-[600px] shadow-lg">
-      <CardHeader className="border-b bg-muted/30 py-4">
+    <Card className="flex flex-col min-h-[600px] max-h-[80vh] shadow-lg">
+      <CardHeader className="border-b bg-muted/30 py-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <Bot className="h-5 w-5" />
@@ -549,8 +548,8 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-1 flex-col p-0 overflow-hidden">
-        <ScrollArea className="flex-1" ref={scrollRef}>
+      <CardContent className="flex flex-1 flex-col p-0 min-h-0">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
           <div className="p-4 space-y-4">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-4">
@@ -592,7 +591,7 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
                     </div>
 
                     <div
-                      className={`flex-1 max-w-[85%] rounded-2xl px-4 py-3 ${
+                      className={`flex-1 rounded-2xl px-4 py-3 ${
                         message.role === "user"
                           ? "bg-primary text-primary-foreground rounded-tr-sm"
                           : message.status === "error"
@@ -622,9 +621,9 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
               </>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
-        <div className="border-t bg-background p-4">
+        <div className="border-t bg-background p-4 shrink-0">
           {messages.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {examplePrompts.map((prompt) => (
