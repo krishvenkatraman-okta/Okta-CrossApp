@@ -71,7 +71,7 @@ export function TokenPanel() {
       case "access_token":
         return "Access Token"
       case "id_jag_token":
-        return "ID-JAG Token"
+        return "Cross-App ID-JAG Token"
       case "auth0_access_token":
         return "Okta Relay Access Token"
       case "salesforce_auth0_access_token":
@@ -84,6 +84,8 @@ export function TokenPanel() {
         return "Web ID Token"
       case "web_access_token":
         return "Web Access Token"
+      case "vaulted_secret_token":
+        return "Vaulted Secret Token"
       default:
         return type
     }
@@ -96,7 +98,7 @@ export function TokenPanel() {
       case "access_token":
         return "OAuth 2.0 access token for resource access"
       case "id_jag_token":
-        return "Cross-app access token (ID-JAG for Gateway)"
+        return "Cross-app ID-JAG token from token exchange"
       case "auth0_access_token":
         return "Okta Relay access token for resource API"
       case "salesforce_auth0_access_token":
@@ -109,6 +111,8 @@ export function TokenPanel() {
         return "Web Client ID token from Okta"
       case "web_access_token":
         return "Web Client access token"
+      case "vaulted_secret_token":
+        return "Vaulted secret containing GitHub PAT"
       default:
         return ""
     }

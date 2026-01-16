@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "@/components/icons"
+import { tokenStore } from "@/lib/token-store"
 
 interface Message {
   id: string
@@ -189,6 +190,20 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
     }
   }, [messages])
 
+  const decodeAndStoreToken = (token: string, type: string) => {
+    try {
+      const parts = token.split(".")
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]))
+        tokenStore.setToken(type, token, payload)
+      } else {
+        tokenStore.setToken(type, token)
+      }
+    } catch {
+      tokenStore.setToken(type, token)
+    }
+  }
+
   const addMessage = (
     role: "user" | "assistant",
     content: string,
@@ -216,8 +231,9 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
     const steps: string[] = []
 
     try {
-      steps.push("Step 1: Token Exchange")
+      steps.push("Step 1: Token Exchange (ID-JAG)")
       steps.push("grant_type: urn:ietf:params:oauth:grant-type:token-exchange")
+      steps.push("requested_token_type: urn:ietf:params:oauth:token-type:id-jag")
 
       const tokenResponse = await fetch("/api/token-exchange", {
         method: "POST",
@@ -231,6 +247,12 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
       }
 
       const tokenData = await tokenResponse.json()
+
+      if (tokenData.idJagToken) {
+        decodeAndStoreToken(tokenData.idJagToken, "id_jag_token")
+        steps.push("ID-JAG Token received and stored")
+      }
+
       steps.push("Access Token received (scope: " + (tokenData.scope || "hr:read") + ")")
 
       steps.push("Step 2: Fetch HR Data")
@@ -277,7 +299,9 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
     const steps: string[] = []
 
     try {
-      steps.push("Step 1: Token Exchange")
+      steps.push("Step 1: Token Exchange (ID-JAG)")
+      steps.push("grant_type: urn:ietf:params:oauth:grant-type:token-exchange")
+      steps.push("requested_token_type: urn:ietf:params:oauth:token-type:id-jag")
 
       const tokenResponse = await fetch("/api/token-exchange", {
         method: "POST",
@@ -291,6 +315,12 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
       }
 
       const tokenData = await tokenResponse.json()
+
+      if (tokenData.idJagToken) {
+        decodeAndStoreToken(tokenData.idJagToken, "id_jag_token")
+        steps.push("ID-JAG Token received and stored")
+      }
+
       steps.push("Access Token received")
 
       steps.push("Step 2: Fetch KPI Data")
@@ -355,6 +385,16 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
       }
 
       const vaultData = await vaultResponse.json()
+
+      if (vaultData.issuedTokenType) {
+        tokenStore.setToken("vaulted_secret_token", "***REDACTED***", {
+          issued_token_type: vaultData.issuedTokenType,
+          expires_in: vaultData.expiresIn,
+          secret_key: vaultData.secretKeyName || "githubPAT",
+        })
+        steps.push("Vaulted Secret Token stored")
+      }
+
       steps.push("Vaulted secret received (expires: " + vaultData.expiresIn + "s)")
       steps.push("GitHub PAT retrieved (redacted)")
 
@@ -439,6 +479,16 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
       }
 
       const vaultData = await vaultResponse.json()
+
+      if (vaultData.issuedTokenType) {
+        tokenStore.setToken("vaulted_secret_token", "***REDACTED***", {
+          issued_token_type: vaultData.issuedTokenType,
+          expires_in: vaultData.expiresIn,
+          secret_key: vaultData.secretKeyName || "githubPAT",
+        })
+        steps.push("Vaulted Secret Token stored")
+      }
+
       steps.push("Vaulted secret received (expires: " + vaultData.expiresIn + "s)")
       steps.push("GitHub PAT retrieved (redacted)")
 

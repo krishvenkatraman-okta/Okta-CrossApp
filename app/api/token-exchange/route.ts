@@ -48,9 +48,12 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json()
     console.log("[v0] Token exchange successful")
+    console.log("[v0] Issued token type:", data.issued_token_type)
 
     return NextResponse.json({
       accessToken: data.access_token,
+      idJagToken: data.access_token, // The token exchange returns ID-JAG as access_token
+      issuedTokenType: data.issued_token_type,
       tokenType: data.token_type,
       expiresIn: data.expires_in,
       scope: data.scope,
