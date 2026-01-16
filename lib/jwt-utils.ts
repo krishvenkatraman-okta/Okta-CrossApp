@@ -11,10 +11,11 @@ export async function createClientAssertion(): Promise<string> {
     alg: "RS256",
   }
 
+  // For OAuth 2.0 client assertion, iss and sub must be the client_id
   const payload = {
-    iss: OKTA_CONFIG.agentPrincipalId,
-    aud: `${OKTA_CONFIG.orgDomain}/oauth2/v1/token`, // Token endpoint as aud
-    sub: OKTA_CONFIG.agentPrincipalId,
+    iss: OKTA_CONFIG.clientId,
+    aud: `${OKTA_CONFIG.orgDomain}/oauth2/v1/token`,
+    sub: OKTA_CONFIG.clientId,
     exp: now + 60,
     iat: now,
     jti: generateJti(),
