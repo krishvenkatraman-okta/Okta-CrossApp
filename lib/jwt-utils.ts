@@ -2,6 +2,10 @@ import { OKTA_CONFIG } from "./okta-config"
 
 /**
  * Creates a JWT client assertion for client authentication
+ * Based on Postman working implementation:
+ * - iss and sub must be the principalId (agent principal ID)
+ * - aud must be the token endpoint URL
+ * - kid must come from the JWK
  */
 export async function createClientAssertion(): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
@@ -11,18 +15,21 @@ export async function createClientAssertion(): Promise<string> {
     alg: "RS256",
   }
 
-  // For OAuth 2.0 client assertion, iss and sub must be the client_id
+  // For OAuth 2.0 client assertion in token exchange, iss and sub must be the agent principal ID
   const payload = {
-    iss: OKTA_CONFIG.clientId,
+    iss: OKTA_CONFIG.agentPrincipalId,
     aud: `${OKTA_CONFIG.orgDomain}/oauth2/v1/token`,
-    sub: OKTA_CONFIG.clientId,
+    sub: OKTA_CONFIG.agentPrincipalId,
     exp: now + 60,
     iat: now,
     jti: generateJti(),
   }
 
   console.log("[v0] Creating client assertion JWT")
-  console.log("[v0] JWT Payload:", payload)
+  console.log("[v0] JWT Header:", JSON.stringify(header))
+  console.log("[v0] JWT Payload:", JSON.stringify(payload))
+  console.log("[v0] Using agentPrincipalId:", OKTA_CONFIG.agentPrincipalId)
+  console.log("[v0] Using orgDomain:", OKTA_CONFIG.orgDomain)
 
   const encoder = new TextEncoder()
 
@@ -50,13 +57,13 @@ export async function createClientAssertion(): Promise<string> {
   const sig = base64UrlEncode(signature)
   const jwt = signatureInput + "." + sig
 
-  console.log("[v0] Client assertion created")
+  console.log("[v0] Client assertion created successfully")
 
   return jwt
 }
 
 /**
- * Base64 URL encode
+ * Base64 URL encode (matching Postman b64u function)
  */
 function base64UrlEncode(input: ArrayBuffer | Uint8Array): string {
   const bytes = input instanceof ArrayBuffer ? new Uint8Array(input) : input
@@ -69,10 +76,17 @@ function base64UrlEncode(input: ArrayBuffer | Uint8Array): string {
 }
 
 /**
- * Generates a unique JWT ID
+ * Generates a unique JWT ID (matching Postman: pm.variables.replaceIn('{{$randomUUID}}'))
  */
 function generateJti(): string {
+  // Generate UUID v4 format
   const array = new Uint8Array(16)
   crypto.getRandomValues(array)
-  return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("")
+
+  // Set version (4) and variant (8, 9, a, or b)
+  array[6] = (array[6] & 0x0f) | 0x40
+  array[8] = (array[8] & 0x3f) | 0x80
+
+  const hex = Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("")
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
