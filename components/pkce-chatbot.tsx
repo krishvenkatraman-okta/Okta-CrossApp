@@ -4,21 +4,29 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import {
-  Bot,
-  Send,
-  User,
-  Loader2,
-  Github,
-  Users,
-  TrendingUp,
-  GitPullRequest,
-  CheckCircle,
-  AlertCircle,
-  ChevronDown,
-  ChevronUp,
-} from "@/components/icons"
+import { Bot, Send, User, Loader2, Github, Users, TrendingUp, GitPullRequest } from "@/components/icons"
 import { tokenStore } from "@/lib/token-store"
+import { FlowDiagram, parseStepsToFlow } from "@/components/flow-diagram"
+
+function TicketIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+      <path d="M13 5v2" />
+      <path d="M13 17v2" />
+      <path d="M13 11v2" />
+    </svg>
+  )
+}
 
 interface Message {
   id: string
@@ -35,77 +43,13 @@ interface PKCEChatbotProps {
 }
 
 function StepsDisplay({ steps }: { steps: string[] }) {
-  const [isExpanded, setIsExpanded] = useState(false)
-
   if (!steps || steps.length === 0) return null
 
-  // Show first 3 steps, rest collapsed
-  const visibleSteps = isExpanded ? steps : steps.slice(0, 3)
-  const hasMore = steps.length > 3
+  const flowSteps = parseStepsToFlow(steps)
 
-  return (
-    <div className="mb-3 rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
-      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border/50 flex items-center gap-2">
-        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-        Authentication Flow
-      </div>
-      <div className="p-3 space-y-1.5 text-xs font-mono">
-        {visibleSteps.map((step, idx) => {
-          const isError = step.startsWith("Error")
-          const isSuccess =
-            step.includes("success") ||
-            step.includes("verified") ||
-            step.includes("created") ||
-            step.includes("Retrieved")
-          const isStep = step.startsWith("Step")
+  if (flowSteps.length === 0) return null
 
-          return (
-            <div
-              key={idx}
-              className={`flex items-start gap-2 ${
-                isError
-                  ? "text-destructive"
-                  : isSuccess
-                    ? "text-green-600 dark:text-green-400"
-                    : isStep
-                      ? "text-foreground font-medium mt-2 first:mt-0"
-                      : "text-muted-foreground pl-4"
-              }`}
-            >
-              {isStep && (
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] text-primary font-semibold">
-                  {step.match(/Step (\d)/)?.[1] || idx + 1}
-                </span>
-              )}
-              {isSuccess && !isStep && <CheckCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />}
-              {isError && <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />}
-              <span className={isStep ? "" : ""}>
-                {isStep ? step.replace(/Step \d: /, "") : step.replace(/^\s+/, "")}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-      {hasMore && (
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 border-t border-border/50 flex items-center justify-center gap-1 transition-colors"
-        >
-          {isExpanded ? (
-            <>
-              <ChevronUp className="h-3 w-3" />
-              Show less
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-3 w-3" />
-              Show {steps.length - 3} more steps
-            </>
-          )}
-        </button>
-      )}
-    </div>
-  )
+  return <FlowDiagram steps={flowSteps} title="Authentication Flow" />
 }
 
 function FormattedContent({ content, status }: { content: string; status?: "success" | "error" }) {
@@ -231,7 +175,7 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
     const steps: string[] = []
 
     try {
-      steps.push("Step 1: Token Exchange (ID-JAG)")
+      steps.push("Step 1: Token Exchange (Cross-App ID-JAG)")
       steps.push("grant_type: urn:ietf:params:oauth:grant-type:token-exchange")
       steps.push("requested_token_type: urn:ietf:params:oauth:token-type:id-jag")
 
@@ -255,7 +199,8 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
 
       steps.push("Access Token received (scope: " + (tokenData.scope || "hr:read") + ")")
 
-      steps.push("Step 2: Fetch HR Data")
+      steps.push("Step 2: Fetch HR Data from Resource Server")
+      steps.push("Using access token to authenticate")
 
       const hrResponse = await fetch("/api/resource/hr", {
         method: "GET",
@@ -267,6 +212,7 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
       }
 
       const hrData = await hrResponse.json()
+      steps.push("HR data retrieved successfully")
       steps.push("Retrieved " + hrData.data.length + " employee records")
 
       let responseContent = "Employee Data Retrieved!\n\n"
@@ -299,7 +245,7 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
     const steps: string[] = []
 
     try {
-      steps.push("Step 1: Token Exchange (ID-JAG)")
+      steps.push("Step 1: Token Exchange (Cross-App ID-JAG)")
       steps.push("grant_type: urn:ietf:params:oauth:grant-type:token-exchange")
       steps.push("requested_token_type: urn:ietf:params:oauth:token-type:id-jag")
 
@@ -323,7 +269,8 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
 
       steps.push("Access Token received")
 
-      steps.push("Step 2: Fetch KPI Data")
+      steps.push("Step 2: Fetch KPI Data from Resource Server")
+      steps.push("Using access token to authenticate")
 
       const kpiResponse = await fetch("/api/resource/kpi", {
         method: "GET",
@@ -335,6 +282,7 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
       }
 
       const kpiData = await kpiResponse.json()
+      steps.push("KPI data retrieved successfully")
       steps.push("Retrieved " + kpiData.data.length + " KPI metrics")
 
       let responseContent = "KPI Data Retrieved!\n\n"
@@ -366,9 +314,10 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
     const steps: string[] = []
 
     try {
-      steps.push("Step 1: Token Exchange (Vaulted Secret)")
+      steps.push("Step 1: Token Exchange (PAM Vaulted Secret)")
       steps.push("grant_type: urn:ietf:params:oauth:grant-type:token-exchange")
       steps.push("requested_token_type: urn:okta:params:oauth:token-type:vaulted-secret")
+      steps.push("resource: GITHUB_PAT_PATH")
 
       const vaultResponse = await fetch("/api/token-exchange/vaulted-secret", {
         method: "POST",
@@ -392,13 +341,13 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
           expires_in: vaultData.expiresIn,
           secret_key: vaultData.secretKeyName || "githubPAT",
         })
-        steps.push("Vaulted Secret Token stored")
       }
 
       steps.push("Vaulted secret received (expires: " + vaultData.expiresIn + "s)")
-      steps.push("GitHub PAT retrieved (redacted)")
+      steps.push("GitHub PAT retrieved from vault")
 
       steps.push("Step 2: GitHub API Call")
+      steps.push("Validating GitHub token")
 
       const githubResponse = await fetch("/api/github/repo-info", {
         method: "POST",
@@ -416,9 +365,9 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
 
       const repoData = await githubResponse.json()
 
-      if (repoData.steps) {
-        repoData.steps.forEach((s: string) => steps.push(s))
-      }
+      steps.push("Token validated for user: " + repoData.user)
+      steps.push("Repository access verified: " + repoData.fullName)
+      steps.push("Retrieved " + (repoData.recentCommits?.length || 0) + " recent commits")
 
       let responseContent = "GitHub Repository Info:\n\n"
       responseContent += `Repository: ${repoData.fullName}\n`
@@ -461,8 +410,10 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
     const steps: string[] = []
 
     try {
-      steps.push("Step 1: Token Exchange (Vaulted Secret)")
+      steps.push("Step 1: Token Exchange (PAM Vaulted Secret)")
+      steps.push("grant_type: urn:ietf:params:oauth:grant-type:token-exchange")
       steps.push("requested_token_type: urn:okta:params:oauth:token-type:vaulted-secret")
+      steps.push("resource: GITHUB_PAT_PATH")
 
       const vaultResponse = await fetch("/api/token-exchange/vaulted-secret", {
         method: "POST",
@@ -486,13 +437,13 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
           expires_in: vaultData.expiresIn,
           secret_key: vaultData.secretKeyName || "githubPAT",
         })
-        steps.push("Vaulted Secret Token stored")
       }
 
       steps.push("Vaulted secret received (expires: " + vaultData.expiresIn + "s)")
-      steps.push("GitHub PAT retrieved (redacted)")
+      steps.push("GitHub PAT retrieved from vault")
 
       steps.push("Step 2: Create GitHub PR")
+      steps.push("Validating GitHub token")
 
       const prResponse = await fetch("/api/github/create-pr", {
         method: "POST",
@@ -510,9 +461,11 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
 
       const prData = await prResponse.json()
 
-      if (prData.steps) {
-        prData.steps.forEach((s: string) => steps.push(s))
-      }
+      steps.push("Token validated for user: " + prData.user)
+      steps.push("Repository access verified: " + prData.repo)
+      steps.push("Branch created: " + prData.branch)
+      steps.push("README.md updated with demo timestamp")
+      steps.push("Pull request created successfully")
 
       let responseContent = "GitHub PR Created!\n\n"
       responseContent += `Repository: ${prData.repo}\n`
@@ -543,154 +496,265 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
     }
   }
 
+  const handleServiceNowTicket = async () => {
+    setIsLoading(true)
+    addMessage("user", "Create ServiceNow Ticket")
+
+    const steps: string[] = []
+
+    try {
+      steps.push("Step 1: Token Exchange (PAM Service Account)")
+      steps.push("grant_type: urn:ietf:params:oauth:grant-type:token-exchange")
+      steps.push("requested_token_type: urn:okta:params:oauth:token-type:service-account")
+      steps.push("resource: SERVICENOW_SECRET_PATH")
+
+      const serviceAccountResponse = await fetch("/api/token-exchange/service-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!serviceAccountResponse.ok) {
+        const errorData = await serviceAccountResponse.json()
+        if (errorData.details?.includes("subject_token")) {
+          throw new Error("ID token expired - please re-authenticate")
+        }
+        throw new Error(`Service account exchange failed: ${errorData.details || errorData.error}`)
+      }
+
+      const serviceAccountData = await serviceAccountResponse.json()
+
+      tokenStore.setToken("service_account_token", "***REDACTED***", {
+        issued_token_type: serviceAccountData.issuedTokenType,
+        expires_in: serviceAccountData.expiresIn,
+        username: serviceAccountData.username,
+      })
+
+      steps.push("Service account credentials received (expires: " + serviceAccountData.expiresIn + "s)")
+      steps.push("Username: " + serviceAccountData.username)
+      steps.push("Password retrieved from vault")
+
+      steps.push("Step 2: Create ServiceNow Ticket")
+      steps.push("Using Basic Auth with PAM credentials")
+
+      const ticketResponse = await fetch("/api/servicenow/create-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: serviceAccountData.username,
+          password: serviceAccountData.password,
+          shortDescription: "Demo ticket from Okta Cross-App Access",
+          description: "This ticket was created via Okta PAM service account integration",
+        }),
+      })
+
+      if (!ticketResponse.ok) {
+        const errorData = await ticketResponse.json()
+        throw new Error(`ServiceNow ticket creation failed: ${errorData.error}`)
+      }
+
+      const ticketData = await ticketResponse.json()
+
+      steps.push("Authenticated with ServiceNow")
+      steps.push("Ticket created successfully")
+
+      let responseContent = "ServiceNow Ticket Created!\n\n"
+      responseContent += `Ticket Number: ${ticketData.ticketNumber}\n`
+      responseContent += `Sys ID: ${ticketData.sysId}\n`
+      responseContent += `State: ${ticketData.state}\n`
+      responseContent += `Priority: ${ticketData.priority}\n`
+      responseContent += `Short Description: ${ticketData.shortDescription}\n`
+
+      if (ticketData.ticketUrl) {
+        responseContent += `URL: ${ticketData.ticketUrl}\n`
+      }
+
+      addMessage("assistant", responseContent, steps, { ticket: ticketData }, "success")
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      steps.push("Error: " + errorMessage)
+
+      let failureContent = "Failed to create ServiceNow ticket.\n\n"
+      failureContent += errorMessage
+
+      if (errorMessage.includes("re-authenticate")) {
+        failureContent += "\n\nHint: Your session may have expired. Please refresh and sign in again."
+      } else if (errorMessage.includes("service_account") || errorMessage.includes("SERVICENOW_SECRET_PATH")) {
+        failureContent += "\n\nHint: Check SERVICENOW_SECRET_PATH env var configuration."
+      }
+
+      addMessage("assistant", failureContent, steps, undefined, "error")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
-    const userInput = input.toLowerCase().trim()
+    const query = input.toLowerCase().trim()
     setInput("")
 
-    if (userInput.includes("employee") || userInput.includes("hr")) {
+    if (query.includes("employee") || query.includes("hr")) {
       await handleEmployeeData()
-    } else if (userInput.includes("kpi") || userInput.includes("metric") || userInput.includes("performance")) {
+    } else if (query.includes("kpi") || query.includes("metric")) {
       await handleKPIData()
-    } else if (
-      userInput.includes("pr") ||
-      userInput.includes("pull request") ||
-      userInput.includes("create pr") ||
-      userInput.includes("update readme")
-    ) {
+    } else if (query.includes("github") && query.includes("pr")) {
       await handleGitHubCreatePR()
-    } else if (userInput.includes("github") || userInput.includes("repo") || userInput.includes("commit")) {
+    } else if (query.includes("github") || query.includes("repo")) {
       await handleGitHubRepoInfo()
+    } else if (query.includes("servicenow") || query.includes("ticket")) {
+      await handleServiceNowTicket()
     } else {
       addMessage("user", input)
       addMessage(
         "assistant",
         "I can help you with:\n\n" +
-          "1. Get Employee Data - HR information via token exchange\n" +
-          "2. Get KPI Data - Performance metrics\n" +
-          "3. Get GitHub Repo Info - Access private repo via vaulted secret\n" +
-          "4. Create GitHub PR - Create PR via vaulted secret\n\n" +
-          "Try: 'employee data', 'KPI metrics', 'GitHub repo', or 'create PR'",
+          "- Employee Data - Get HR employee information\n" +
+          "- KPI Metrics - View key performance indicators\n" +
+          "- GitHub Repo Info - View repository details\n" +
+          "- Create GitHub PR - Create a pull request\n" +
+          "- ServiceNow Ticket - Create a support ticket\n\n" +
+          "Try asking for one of these!",
       )
     }
   }
 
-  const examplePrompts = [
+  const quickActions = [
     { label: "Employee Data", icon: Users, action: handleEmployeeData },
     { label: "KPI Metrics", icon: TrendingUp, action: handleKPIData },
     { label: "GitHub Repo Info", icon: Github, action: handleGitHubRepoInfo },
     { label: "Create GitHub PR", icon: GitPullRequest, action: handleGitHubCreatePR },
+    { label: "ServiceNow Ticket", icon: TicketIcon, action: handleServiceNowTicket },
   ]
 
   return (
-    <Card className="flex flex-col min-h-[600px] max-h-[80vh] shadow-lg">
-      <CardHeader className="border-b bg-muted/30 py-4 shrink-0">
+    <Card className="flex flex-col min-h-[600px] max-h-[80vh]">
+      <CardHeader className="shrink-0 border-b">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <Bot className="h-5 w-5" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+            <Bot className="h-5 w-5 text-primary" />
           </div>
           <div>
             <CardTitle className="text-lg">Enterprise Assistant</CardTitle>
-            <CardDescription className="text-xs">Okta cross-app authentication</CardDescription>
+            <CardDescription>Okta cross-app authentication</CardDescription>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-1 flex-col p-0 min-h-0">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          <div className="p-4 space-y-4">
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 px-4">
-                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                  <Bot className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <p className="text-center text-muted-foreground mb-6">
-                  Welcome! Access enterprise data securely using Okta cross-app authentication.
-                </p>
-                <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
-                  {examplePrompts.map((prompt) => (
-                    <Button
-                      key={prompt.label}
-                      variant="outline"
-                      onClick={prompt.action}
-                      disabled={isLoading}
-                      className="h-auto py-3 px-4 flex flex-col items-center gap-2 hover:bg-muted bg-transparent"
-                    >
-                      <prompt.icon className="h-5 w-5" />
-                      <span className="text-xs font-medium">{prompt.label}</span>
-                    </Button>
-                  ))}
-                </div>
+      <CardContent className="flex-1 flex flex-col min-h-0 p-0">
+        {/* Messages area with scroll */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center py-8">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
+                <Bot className="h-8 w-8 text-muted-foreground" />
               </div>
-            ) : (
-              <>
-                {messages.map((message) => (
-                  <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : ""}`}>
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : message.status === "error"
-                            ? "bg-destructive/10 text-destructive"
-                            : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                    </div>
-
-                    <div
-                      className={`flex-1 rounded-2xl px-4 py-3 ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground rounded-tr-sm"
-                          : message.status === "error"
-                            ? "bg-destructive/5 border border-destructive/20 rounded-tl-sm"
-                            : "bg-muted rounded-tl-sm"
-                      }`}
-                    >
-                      {message.role === "assistant" && message.steps && <StepsDisplay steps={message.steps} />}
-                      <FormattedContent content={message.content} status={message.status} />
-                    </div>
-                  </div>
+              <h3 className="text-lg font-semibold mb-2">Welcome to Enterprise Assistant</h3>
+              <p className="text-sm text-muted-foreground mb-6 max-w-md">
+                Access enterprise data using Okta cross-app authentication. Select an action below or type a request.
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 w-full max-w-lg">
+                {quickActions.map((action) => (
+                  <Button
+                    key={action.label}
+                    variant="outline"
+                    size="sm"
+                    onClick={action.action}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 h-auto py-3 bg-transparent"
+                  >
+                    <action.icon className="h-4 w-4" />
+                    <span className="text-xs">{action.label}</span>
+                  </Button>
                 ))}
-
-                {isLoading && (
-                  <div className="flex gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                      <Bot className="h-4 w-4" />
-                    </div>
-                    <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-sm text-muted-foreground">Processing request...</span>
-                      </div>
-                    </div>
+              </div>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                {message.role === "assistant" && (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <Bot className="h-4 w-4 text-primary" />
                   </div>
                 )}
-              </>
-            )}
-          </div>
+
+                <div
+                  className={`rounded-2xl px-4 py-3 max-w-[85%] ${
+                    message.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : message.status === "error"
+                        ? "bg-destructive/10 border border-destructive/20"
+                        : "bg-muted"
+                  }`}
+                >
+                  {/* Flow Diagram for steps */}
+                  {message.steps && message.steps.length > 0 && <StepsDisplay steps={message.steps} />}
+
+                  {/* Message content */}
+                  <FormattedContent content={message.content} status={message.status} />
+
+                  {/* Timestamp */}
+                  <div
+                    className={`text-[10px] mt-2 ${
+                      message.role === "user" ? "text-primary-foreground/70" : "text-muted-foreground"
+                    }`}
+                  >
+                    {message.timestamp.toLocaleTimeString()}
+                  </div>
+                </div>
+
+                {message.role === "user" && (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                    <User className="h-4 w-4" />
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+
+          {isLoading && (
+            <div className="flex gap-3 justify-start">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <Bot className="h-4 w-4 text-primary" />
+              </div>
+              <div className="bg-muted rounded-2xl px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm text-muted-foreground">Processing request...</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="border-t bg-background p-4 shrink-0">
-          {messages.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {examplePrompts.map((prompt) => (
+        {/* Quick actions bar when messages exist */}
+        {messages.length > 0 && (
+          <div className="shrink-0 border-t p-2 bg-muted/30">
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {quickActions.map((action) => (
                 <Button
-                  key={prompt.label}
-                  variant="secondary"
+                  key={action.label}
+                  variant="ghost"
                   size="sm"
-                  onClick={prompt.action}
+                  onClick={action.action}
                   disabled={isLoading}
                   className="h-7 text-xs gap-1.5"
                 >
-                  <prompt.icon className="h-3 w-3" />
-                  {prompt.label}
+                  <action.icon className="h-3.5 w-3.5" />
+                  {action.label}
                 </Button>
               ))}
             </div>
-          )}
+          </div>
+        )}
+
+        {/* Input area */}
+        <div className="shrink-0 border-t p-4">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               ref={inputRef}
@@ -698,15 +762,10 @@ export function PKCEChatbot({ idToken }: PKCEChatbotProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask for employee data, KPIs, or GitHub info..."
-              className="flex-1 rounded-full border bg-muted/50 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               disabled={isLoading}
+              className="flex-1 rounded-full border border-input bg-background px-4 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!input.trim() || isLoading}
-              className="h-10 w-10 rounded-full shrink-0"
-            >
+            <Button type="submit" size="icon" disabled={isLoading || !input.trim()} className="rounded-full shrink-0">
               <Send className="h-4 w-4" />
             </Button>
           </form>
